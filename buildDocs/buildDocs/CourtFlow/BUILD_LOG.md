@@ -83,3 +83,25 @@
   check failed reading GitHub username). No remote branch or deployment claimed.
 - Next: owner authenticates Git push locally and pushes main; reopen/reload Codex
   to expose newly authenticated provider tools, then continue the approved release.
+
+## 2026-10-31 — RELEASE-002: approved free-tier provider provisioning
+
+- Verified public GitHub HEAD 60c498a and direct Neon/Render MCP access. Vercel
+  list-projects works; target team grant is pending (403, consent link supplied).
+- Created dedicated Neon Free Singapore PostgreSQL 17 CourtFlow project and applied
+  versioned 001 migration transaction once after confirming an empty schema.
+  Verified facility/court/booking counts 1/4/0 and exclusion constraint presence.
+- Created Render Free Singapore Docker service with auto-deploy explicitly off.
+  Initial manual deployment builds 60c498a; database secret transferred directly
+  to Render env with verified TLS. Temporary CORS origin blocks browser access
+  until Vercel origin is available. No production booking or stress tests run.
+- Files: updated HANDOFF and production runbook; appended this log. No application
+  code changed. Prior local verification receipt retained; git diff check required.
+- Pending: Render build/health verification, owner dashboard health path setting,
+  Vercel team consent/Hobby verification/frontend deployment, exact CORS origin,
+  one controlled browser booking smoke. See HANDOFF for stable provider IDs.
+
+- Deployment result: Render manual deploy LIVE, finished 2026-10-30T18:32:38Z;
+  single essential GET /healthz returned HTTP 200 and {"status":"ok"}. Brief logs
+  confirmed live service. Frontend and end-to-end booking remain pending owner
+  Vercel grant. git diff --check passed. No code changes or local test reruns.

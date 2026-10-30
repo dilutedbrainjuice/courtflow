@@ -1,7 +1,7 @@
 # CourtFlow handoff
 
 ## Current development state — 2026-10-31
-Local V1 implemented. Git branch main; no remote or deployment. See BUILD_LOG for
+Local V1 implemented. Git branch main; public GitHub published. Release in progress. See BUILD_LOG for
 append-only results and local Git history for commits. Original vault content and
 paths preserved. Read AGENTS, DEVELOPMENT, CODEX_START_HERE and WORKFLOW_ADDENDUM.
 
@@ -69,3 +69,41 @@ HTTPS GitHub authentication. Neon/Render/Vercel MCPs report OAuth, but their too
 are not exposed in this running chat. No cloud resources, migration or deployment
 performed. Continue with existing authorization after Git authentication and tool
 availability are resolved; do not ask for the same release approval again.
+
+## RELEASE-002 — 2026-10-31 MYT: provider setup in progress
+
+- Published GitHub HEAD verified as `60c498a45525033b527e0490c8569f06e2d9dce5`.
+  Existing local verification receipt remains applicable; application code unchanged.
+- Direct Neon and Render MCPs work. Codex-app wrappers return Unknown tool; use
+  `mcp__neon__*` and `mcp__render__*` instead.
+- Neon organization `org-small-haze-66334799` reports Free. Dedicated Singapore
+  PostgreSQL 17 project `aged-water-08232396` (`courtflow-demo`), production branch
+  `br-lively-block-azo53da1`, database `courtflow`, role `courtflow_owner`.
+  Migration `backend/migrations/001_initial.sql` applied once as a transaction to
+  the verified empty database. Verified 1 facility, 4 courts, 0 bookings, exclusion
+  constraint present. No production load/concurrency tests performed.
+- Compute bounded to 0.25 CU. Explicit suspend-time configuration was rejected by
+  Free plan; creation with provider defaults succeeded. API reports timeout 0;
+  official Free-plan documentation says idle suspension is fixed at 5 minutes.
+  Do not upgrade plans or add keepalive jobs; confirm idle behavior if necessary.
+- Render Free Singapore service `srv-dbie50uk1f9s73ej3ln0`, name courtflow-api,
+  URL https://courtflow-api-gqes.onrender.com. Docker context `backend`, Dockerfile
+  `backend/Dockerfile`, branch main, autoDeploy no / autoDeployTrigger off.
+  Initial manual deploy `dep-dbie51uk1f9s73ej3okg` is LIVE on approved GitHub HEAD.
+  Finished 2026-10-30T18:32:38Z (2026-10-31 02:32 MYT). Essential GET /healthz
+  returned HTTP 200 with {"status":"ok"}; brief deployment logs show live URL.
+  DATABASE_URL transferred directly to provider env with sslmode=verify-full;
+  no credentials written into repository or chat. ALLOWED_ORIGINS temporarily
+  `https://courtflow.invalid`; replace with exact final frontend origin and deploy.
+- Render MCP cannot set healthCheckPath; dashboard browser requires owner login.
+  Owner must set `/healthz` at the service settings page. No Blueprint was created,
+  so Blueprint Auto Sync is not applicable.
+- Vercel list-projects works, but team `team_CIAncTjfDuRgAoEHPUGPo0xa`
+  (dilutedbrainjuices-projects) requires an additional team access grant (403).
+  A single-use 10-minute authorization link was presented in chat. Retry get_team
+  after owner approval; generate a fresh link if expired, without reconnecting.
+  Verify Hobby plan, then create CourtFlow with root frontend and manual deploy.
+  Existing frontend/vercel.json disables Git deployments. No CourtFlow Vercel
+  project or deployment exists yet. No end-to-end booking smoke performed yet.
+- Continue using existing owner release approval. Do not recreate Neon resources,
+  rerun migration unnecessarily, or deploy automatically on Git pushes.

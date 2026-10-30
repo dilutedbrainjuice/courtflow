@@ -1,6 +1,6 @@
 # CourtFlow production runbook — MANUAL RELEASE ONLY
 
-**Status: planned, not deployed.** This is a public **non-commercial portfolio demo** using free plans. Local tests are the source of truth. Owner manually verifies the production build and smoke test.
+**Status: first release in progress; see HANDOFF RELEASE-002 for provider IDs and blockers.** This is a public **non-commercial portfolio demo** using free plans. Local tests are the source of truth. Owner manually verifies the production build and smoke test.
 
 ## Stack
 - GitHub: public monorepo (`/home/terasit/VSProjects/court`)
