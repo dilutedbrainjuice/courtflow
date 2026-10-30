@@ -186,3 +186,14 @@ Final browser regression: all five Playwright tests passed; git diff --check pas
   Frontend cancellation claims now distinguish abort wiring from response guards.
 - Validation: reviewed source references, Markdown fences, section coverage and
   git diff --check. Documentation only; application tests not rerun. No deployment.
+
+## 2026-10-31 — WORKFLOW-007: portable workflow setup guide
+
+- Created docs/PORTABLE_DEVELOPMENT_WORKFLOW.md as a self-contained transfer file
+  for another machine/model/repository, including setup and continuation prompts.
+- Preserved the required implementation → stop Chisle → comments → review → local
+  checks → SA → log/handoff → commit sequence and manual-release authorization.
+- Added destination discovery, instruction merging, exact Chisle directory/license
+  transfer option and a clearly labeled no-plugin implementation-mode fallback.
+- Validation: reviewed against current workflow, Markdown fences and whitespace.
+  Documentation only; application tests not rerun. No deployment or remote push.

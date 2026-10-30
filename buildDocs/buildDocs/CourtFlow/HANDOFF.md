@@ -178,3 +178,10 @@ booking and the health/local-database documents for runtime and local operations
 Each names real source functions and explains errors/transactions/consistency.
 Coverage gaps and implementation limitations are explicit; no application tests
 were rerun for this documentation-only change. Deployment state is unchanged.
+
+## WORKFLOW-007 — portable setup artifact
+
+Use docs/PORTABLE_DEVELOPMENT_WORKFLOW.md to establish this process on another
+machine/model. It contains its own setup prompt and does not require original
+chat context, provider credentials or plugins. Destination paths and approvals
+must be established independently.
