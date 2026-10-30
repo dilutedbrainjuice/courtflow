@@ -55,3 +55,9 @@ skills include upstream Chisle with MIT license and pinned provenance, local-fir
 system-analysis and release-gate. Do not globally install Chisle. Every feature
 needs relevant local tests, verified flow docs, append-only log and updated handoff.
 Never point local test scripts at production or infer release approval from this file.
+
+## Final verification receipt
+Implementation commit: `1da4803`. Final lockfile-based `make verify-local` passed.
+Five browser tests passed separately. No remote configured. PostgreSQL remains
+running locally; API smoke containers were removed and test records cleaned up.
+ESLint 9 reports an upstream support deprecation warning, with no lint failures.
