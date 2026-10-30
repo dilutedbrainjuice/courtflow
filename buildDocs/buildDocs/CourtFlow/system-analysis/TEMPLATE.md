@@ -2,16 +2,25 @@
 
 Status: template; no implemented flow.
 
+Write for a developer who has never seen CourtFlow. Keep Chisle off throughout.
+Verify every statement against source, SQL and tests. Explain the reason for each
+important rule and distinguish implemented behavior, observed test results and
+future work. Do not copy unrelated endpoint rules into each document. Use the
+headings below and add flow-specific sections when needed.
+
 ## Business purpose
 ## API endpoint or triggering event
 ## Request and response
 Include schemas and examples.
 
 ## Ordered function call flow
-List all significant calls in execution order.
+Use a numbered walkthrough from the caller through routing/middleware, validation,
+helpers and actual SQL, then back to the response/UI. Name files and functions.
+Do not invent a service or repository layer if handlers call pgx directly.
 
 ## Functions and responsibilities
-For each significant function: source reference, purpose, parameters, return values.
+For each significant function, identify source, purpose, parameter meaning/units,
+return values and errors. Explain shared helpers within the parent flow.
 
 ## Business rules and validation
 ## Database queries and transactions
@@ -30,4 +39,11 @@ sequenceDiagram
 
 ## Source-file references
 ## Tests validating the flow
-Record exact commands and observed results; distinguish planned tests.
+Record exact local commands, test names and what their assertions actually prove.
+Distinguish real PostgreSQL from HTTP mocks, previous receipts from fresh runs, and
+missing coverage from tested behavior. Never infer an assertion from a test name.
+
+## Limitations and follow-up
+
+Describe relevant limitations and recovery actions in complete sentences. A diagram
+summarizes the prose; it does not replace transaction, error or concurrency details.

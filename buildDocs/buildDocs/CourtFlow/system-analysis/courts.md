@@ -1,73 +1,100 @@
-# Courts flow
+# Courts catalog flow
+
+Verified against repository source at `fecc983`; this is a description of the current implementation.
 
 ## Business purpose
-Show the venue courts and their configured hourly prices.
+
+The customer page needs court names and hourly prices so a guest can choose a playing area. This read does not create reservations or expose guest information.
 
 ## API endpoint or triggering event
-`GET /api/v1/facilities/{id}/courts`. Public fictional demo; no authentication or private user records.
+
+`GET /api/v1/facilities/{id}/courts`. Home calls this during discovery and again after refresh. The endpoint is public.
 
 ## Request and response
-Positive integer facility path ID. Returns 200 array of `{id,name,price_sen}`. Unknown numeric facility returns an empty array.
 
-```bash
-curl http://localhost:8080/api/v1/facilities/1/courts
-```
+The path id must parse as a positive Go integer. There is no request body. A successful response is HTTP 200, for example `[{"id":1,"name":"Court A","price_sen":2500}]`. Prices are integer sen: 2500 means RM25.00 per hour. An empty result is [] rather than null.
 
-## Complete ordered function call flow
-1. `cmd/server/main.go:main` creates a bounded eight-connection pgx pool and passes it to `API`.
-2. `internal/api/api.go:Handler` applies no-store/nosniff headers, validates a supplied Origin against the configured allowlist, answers preflight, and attaches a five-second context deadline.
-3. Route-specific chain: `Handler → courts → strconv.Atoi → pgxpool.Query → rows.Scan → JSON`.
-4. `JSON` writes the response, or `fail` wraps a stable public error string as `{"error":"..."}`. Database details are not returned.
+## Ordered function call flow
 
-## Functions, parameters and returns
-courts validates the path identifier, reads matching courts, checks scan/iteration errors and writes the array. Prices are integer sen, avoiding floating-point money calculations.
-All database operations receive the request context. Handler functions return through HTTP rather than Go return values. `fail(writer,status,message)` and `JSON(writer,status,value)` are shared response helpers.
+1. The shared Handler wrapper checks headers/origin and adds the request context deadline.
+2. ServeMux invokes `API.courts(writer,request)` in `backend/internal/api/catalog.go`.
+3. `strconv.Atoi(request.PathValue("id"))` parses the facility identifier; invalid or nonpositive values return 400 before querying.
+4. `DB.Query(request.Context(), SQL, id) obtains a row iterator.
+5. `rows.Next` and `rows.Scan` copy each row into local values and append its public fields to a response map. A deferred Close releases the iterator.
+6. The handler checks `rows.Err` before calling `JSON` with the complete list. No partial successful list is returned after a read failure.
+
+## Functions and responsibilities
+
+`courts` is an HTTP handler: its inputs are http.ResponseWriter and *http.Request and it returns through the HTTP response, not a Go result. `DB.Query` returns rows/error; Scan populates the response fields. JSON and fail own response serialization, as explained below.
 
 ## Business rules and validation
-The seeded facility is CourtFlow Demo Badminton with courts A–D at RM25/hour, opening 08:00–23:00 MYT. Time is stored as timestamptz. One-hour intervals are half-open. Booking starts must be strictly in the future and no more than 30 rolling days ahead. These constraints are checked for writes, and availability uses the same slot predicate.
+
+A valid positive facility identifier with no matching rows returns 200 and []. There is no separate facility existence query, so unknown facilities and existing facilities without courts look the same. Prices come from the database and are advisory until booking.
 
 ## Database queries and transactions
-SELECT id,name,price_sen FROM courts WHERE facility_id=$1 ORDER BY id. Parameter binding prevents SQL injection. One read statement.
 
-## Error handling and edge cases
-Malformed/nonpositive ID returns 400. Query/iteration failure returns 503; scan failure returns 500.
-Origin policy is browser-origin filtering, not authentication: clients without Origin remain allowed. Unknown routes/methods use Go ServeMux defaults, which are plain-text errors. A request deadline bounds SQL work; server read/write timeouts bound transport work.
-
-## Concurrency and consistency considerations
-Reads do not reserve slots. A customer must submit a booking to establish a reservation; the database exclusion constraint remains authoritative. Concurrent writes may change the next read.
-
-## Mermaid sequence diagram
-```mermaid
-sequenceDiagram
-    participant C as Client
-    participant M as Handler middleware
-    participant H as courts handler
-    participant D as PostgreSQL
-    C->>M: GET /api/v1/facilities/{id}/courts
-    M->>H: Valid origin + bounded context
-    H->>D: Parameterized SQL
-    D-->>H: Rows or error
-    H-->>C: JSON response or public error
+```sql
+SELECT id,name,price_sen FROM courts WHERE facility_id=$1 ORDER BY id;
 ```
 
-## Relevant source-file references
-- `backend/cmd/server/main.go`
-- `backend/internal/api/api.go`
-- `backend/migrations/001_initial.sql`
-- `backend/internal/api/api_test.go`
+This is one read statement with no explicit transaction or writes. The facility ID is bound as $1 rather than concatenated into SQL.
+
+## Error handling and edge cases
+
+Invalid/nonpositive id returns 400 with "invalid facility". Query failures return 503 "database unavailable". Scan failures return 500 "read failed"; iterator failures return 503 "read failed". A client may retry a transient failure. An empty catalog is a successful result rather than a database error.
+
+## Concurrency and consistency
+
+The query provides a database statement snapshot. It takes no application mutex and makes no reservation. A later catalog read or booking may see newer configuration; booking computes its own price. No catalog mutation endpoint currently exists.
+
+## Source-file references
+
+`backend/internal/api/catalog.go`, `backend/internal/api/api.go`, `backend/cmd/server/main.go`, `backend/migrations/001_initial.sql`, and `frontend/app/page.tsx`.
+
+## Specific coverage and limitations
+
+TestIntegration checks HTTP 200 for the seeded courts route. It does not assert the complete response schema, ordering, empty results, malformed catalog identifiers or injected scan errors. These are verified here by source inspection, not claimed as dedicated regression tests.
+
+## Shared HTTP boundary
+
+`backend/cmd/server/main.go:main` creates the pgx pool and passes it to an `api.API`.
+The pool allows at most eight connections per process. Its owner is main, which
+closes it on exit. Creating the pool is not a database readiness check. The HTTP
+server listens on PORT (8080 by default), with header/read/write/idle timeouts of
+5/10/10/60 seconds and an 8192-byte maximum header size.
+
+`backend/internal/api/api.go:Handler` registers the routes in Go's ServeMux. Its
+wrapper sets Cache-Control: no-store and X-Content-Type-Options: nosniff. A supplied
+Origin must exactly match API.Origins or the wrapper returns 403. Requests without
+Origin remain allowed; this is browser-origin filtering, not authentication.
+OPTIONS requests receive 204 with allowed methods and Content-Type in the allowed
+headers. Other requests receive a five-second context deadline that handlers pass
+to pgx. This cancels database work; it is separate from transport timeouts.
+
+`JSON(writer,status,value)` sets application/json, writes the status, and encodes
+value. `fail(writer,status,message)` uses it to return `{"error":"message"}`.
+Database internals are not sent to clients. Encoding/write errors are ignored once
+the status is committed. Unknown routes/methods use ServeMux's default responses.
 
 ## Tests validating the flow
-`make test` runs Go race-enabled tests against loopback PostgreSQL. `TestIntegration` creates a unique schema, applies migration twice, checks all five routes, submits 24 concurrent identical bookings (one 201, 23 conflicts), verifies row count, adjacent/different-court success, invalid input rejection, CORS and rate limiting. `TestSlotValidation` checks temporal boundaries. Schema cleanup occurs after the test. These passed locally on 2026-10-31. No production requests were made.
 
-## Limits and follow-up
-The demo rate limit is global per process, resets on restart and can deny legitimate traffic during abuse. It is a basic bound, not distributed abuse prevention. There is no cancellation, identity, payment, private booking lookup or operations mutation API. No holds or expiry are advertised.
+Run `make test` from the repository root. It supplies the loopback TEST_DATABASE_URL
+and runs `go test -race ./...` in backend. `TestIntegration` in
+`backend/internal/api/api_test.go` creates a unique schema, applies the migration
+twice, invokes handlers through httptest and drops that schema afterward. It uses
+real PostgreSQL but does not open a real HTTP listener. Never supply a production
+connection. Previous local runs passed; this documentation rewrite does not claim
+a fresh test run. Coverage details and gaps specific to this flow follow below.
 
-## Source organization after readability review
+## Sequence diagram
 
-Routing, middleware and JSON helpers remain in `backend/internal/api/api.go`.
-The courts handler lives in `backend/internal/api/catalog.go`.
-Shared court configuration lookup and slot validation live in `backend/internal/api/slots.go`.
-These files share package `api`; file boundaries do not add runtime layers or change
-the documented call sequence. Handlers still call pgx directly; there is no separate
-service or repository layer. SQL parameters, response contracts and transaction
-boundaries are unchanged.
+```mermaid
+sequenceDiagram
+    participant W as Customer page
+    participant A as Handler / courts
+    participant D as PostgreSQL
+    W->>A: GET /api/v1/facilities/{id}/courts
+    A->>D: SELECT id,name,price_sen FROM courts WHERE facility_id=$1 ORDER BY id
+    D-->>A: Catalog rows
+    A-->>W: 200 JSON array or public error
+```

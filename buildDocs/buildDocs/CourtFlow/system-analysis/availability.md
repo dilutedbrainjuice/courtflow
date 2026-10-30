@@ -1,73 +1,113 @@
-# Availability flow
+# Finding available sessions
+
+Verified against repository source at `fecc983`; this is a description of the current implementation.
 
 ## Business purpose
-Present one-hour sessions in the venue timezone with current occupancy and server prices.
+
+A guest chooses a court and a playing date. This flow returns the venue’s hourly sessions, their configured price and whether each can currently be booked. Unavailable sessions remain in the response so the interface can show occupancy instead of hiding times.
 
 ## API endpoint or triggering event
-`GET /api/v1/courts/{id}/availability?date=YYYY-MM-DD`. Public fictional demo; no authentication or private user records.
+
+`GET /api/v1/courts/{id}/availability?date=YYYY-MM-DD`. Home requests it on initial load, on court/date changes and on refresh. There is no identity or authentication requirement.
 
 ## Request and response
-Positive court ID and local calendar date. Returns array of `{start_at,end_at,available,price_sen}`. Instants are serialized in UTC; the client formats MYT.
 
-```bash
-curl "http://localhost:8080/api/v1/courts/1/availability?date=YYYY-MM-DD"
-```
+id is a positive integer court identifier. date is a calendar date in the venue timezone, not a UTC date. A successful 200 response is an array such as `[{"start_at":"2026-11-02T02:00:00Z","end_at":"2026-11-02T03:00:00Z","available":true,"price_sen":2500}]`. The example describes 10–11 am in Kuala Lumpur; whether it is eligible depends on the server clock. Use a date within the current horizon when making a local request.
 
-## Complete ordered function call flow
-1. `cmd/server/main.go:main` creates a bounded eight-connection pgx pool and passes it to `API`.
-2. `internal/api/api.go:Handler` applies no-store/nosniff headers, validates a supplied Origin against the configured allowlist, answers preflight, and attaches a five-second context deadline.
-3. Route-specific chain: `Handler → availability → getCourt → time.LoadLocation / ParseInLocation → pgxpool.Query → validSlot → JSON`.
-4. `JSON` writes the response, or `fail` wraps a stable public error string as `{"error":"..."}`. Database details are not returned.
+## Ordered function call flow
 
-## Functions, parameters and returns
-getCourt(ctx,id) returns court pricing, hours and timezone or an error. availability parses the date in that timezone, reads overlapping confirmed intervals and enumerates opening-hour starts. validSlot(start,now,court) returns whether a start is future, within 30 rolling days, on the hour and inside opening hours.
-All database operations receive the request context. Handler functions return through HTTP rather than Go return values. `fail(writer,status,message)` and `JSON(writer,status,value)` are shared response helpers.
+1. Handler applies the shared HTTP boundary and dispatches to `API.availability`.
+2. availability parses the path ID with strconv.Atoi and rejects nonpositive values.
+3. `getCourt(request.Context(),id)` joins courts to facilities to obtain price, opening hour, closing hour and timezone.
+4. `time.LoadLocation(c.Zone)` resolves the venue clock. ParseInLocation parses date at local midnight. The handler computes today in that same location and admits today through today.AddDate(0,0,30), inclusive.
+5. DB.Query reads confirmed intervals intersecting the selected local day. The handler scans each pair into occupied and checks iterator errors.
+6. For each hour from Open through Close-1, it constructs start as day plus that many hours, and end as start plus one hour. validSlot supplies time eligibility. The overlap loop can then mark the session unavailable.
+7. JSON writes all sessions, with start/end explicitly converted to UTC.
+
+## Functions and responsibilities
+
+`availability(writer,request)` orchestrates parsing, reads and response construction. `getCourt(ctx,id) (court,error)` in slots.go returns a configuration value; missing rows propagate as pgx.ErrNoRows. `validSlot(start,now,court) bool` loads the configured timezone, checks future/horizon boundaries and requires zero minutes, seconds and nanoseconds plus an opening-hour start. It never queries occupancy. The local occupied slice stores [start,end] pairs used by the handler’s overlap calculation.
 
 ## Business rules and validation
-The seeded facility is CourtFlow Demo Badminton with courts A–D at RM25/hour, opening 08:00–23:00 MYT. Time is stored as timestamptz. One-hour intervals are half-open. Booking starts must be strictly in the future and no more than 30 rolling days ahead. These constraints are checked for writes, and availability uses the same slot predicate.
+
+The seed opens at 08:00 and closes at 23:00 in Asia/Kuala_Lumpur, so the last start is 22:00. A start must be strictly later than now and no later than now.AddDate(0,0,30). The date-level and instant-level limits differ: day 30 may be accepted while later sessions on that day are unavailable. Already elapsed sessions today are also returned as unavailable. This code constructs sessions with duration addition and is appropriate to the seeded non-DST venue; it does not establish support for arbitrary daylight-saving transition schedules.
 
 ## Database queries and transactions
-getCourt joins courts to facilities. Occupancy query filters court_id, confirmed status, start_at < next midnight and end_at > midnight. Two independent reads; availability is advisory and can become stale immediately.
 
-## Error handling and edge cases
-400 for malformed ID/date or date outside today through day 30; 404 missing court; 503 database failure; 500 invalid stored timezone or scan error. Earlier slots today and starts beyond the rolling horizon are unavailable.
-Origin policy is browser-origin filtering, not authentication: clients without Origin remain allowed. Unknown routes/methods use Go ServeMux defaults, which are plain-text errors. A request deadline bounds SQL work; server read/write timeouts bound transport work.
+The configuration query selects c.price_sen, f.opens, f.closes and f.timezone from courts joined to facilities by facility_id, with c.id=$1. Occupancy SQL is:
 
-## Concurrency and consistency considerations
-Reads do not reserve slots. A customer must submit a booking to establish a reservation; the database exclusion constraint remains authoritative. Concurrent writes may change the next read.
-
-## Mermaid sequence diagram
-```mermaid
-sequenceDiagram
-    participant C as Client
-    participant M as Handler middleware
-    participant H as availability handler
-    participant D as PostgreSQL
-    C->>M: GET /api/v1/courts/{id}/availability?date=YYYY-MM-DD
-    M->>H: Valid origin + bounded context
-    H->>D: Parameterized SQL
-    D-->>H: Rows or error
-    H-->>C: JSON response or public error
+```sql
+SELECT start_at,end_at FROM bookings
+WHERE court_id=$1 AND status='confirmed'
+  AND start_at < $3 AND end_at > $2;
 ```
 
-## Relevant source-file references
-- `backend/cmd/server/main.go`
-- `backend/internal/api/api.go`
-- `backend/migrations/001_initial.sql`
-- `backend/internal/api/api_test.go`
+$1 is the court ID, $2 the selected midnight and $3 the next local midnight. These are two separate reads with no explicit transaction, locks or writes. The strict comparisons include intervals crossing midnight but exclude ones merely touching a boundary.
+
+## Error handling and edge cases
+
+400 covers an invalid court ID or invalid/missing/out-of-range date. 404 means getCourt found no court. A configuration/occupancy query failure or iterator failure produces 503; scan failure produces 500. An invalid stored timezone returns 500 here. Errors use the shared JSON error shape. Date parsing occurs after the court lookup, so a missing court can be reported before a malformed date.
+
+## Concurrency and consistency
+
+For a candidate [s,e) and stored [bStart,bEnd), overlap means s < bEnd and e > bStart. Adjacent sessions therefore do not overlap. Reads do not reserve anything, and the separate statements need not share a single snapshot. Another guest can book immediately after this response. The booking exclusion constraint, described in booking.md, resolves that later contention.
+
+## Source-file references
+
+`backend/internal/api/availability.go`, `slots.go`, `api.go`, `api_test.go`, `backend/migrations/001_initial.sql`, `frontend/app/page.tsx`.
+
+## Specific coverage and limitations
+
+TestIntegration checks that seeded availability returns 200. TestSlotValidation checks selected future, fractional-hour, past, closed-hour and beyond-horizon starts using a fixed clock. The integration booking assertions cover adjacent intervals, but there is no dedicated assertion of every availability response field or the full day-30 boundary. These gaps must not be mistaken for passing tests.
+
+## Shared HTTP boundary
+
+`backend/cmd/server/main.go:main` creates the pgx pool and passes it to an `api.API`.
+The pool allows at most eight connections per process. Its owner is main, which
+closes it on exit. Creating the pool is not a database readiness check. The HTTP
+server listens on PORT (8080 by default), with header/read/write/idle timeouts of
+5/10/10/60 seconds and an 8192-byte maximum header size.
+
+`backend/internal/api/api.go:Handler` registers the routes in Go's ServeMux. Its
+wrapper sets Cache-Control: no-store and X-Content-Type-Options: nosniff. A supplied
+Origin must exactly match API.Origins or the wrapper returns 403. Requests without
+Origin remain allowed; this is browser-origin filtering, not authentication.
+OPTIONS requests receive 204 with allowed methods and Content-Type in the allowed
+headers. Other requests receive a five-second context deadline that handlers pass
+to pgx. This cancels database work; it is separate from transport timeouts.
+
+`JSON(writer,status,value)` sets application/json, writes the status, and encodes
+value. `fail(writer,status,message)` uses it to return `{"error":"message"}`.
+Database internals are not sent to clients. Encoding/write errors are ignored once
+the status is committed. Unknown routes/methods use ServeMux's default responses.
 
 ## Tests validating the flow
-`make test` runs Go race-enabled tests against loopback PostgreSQL. `TestIntegration` creates a unique schema, applies migration twice, checks all five routes, submits 24 concurrent identical bookings (one 201, 23 conflicts), verifies row count, adjacent/different-court success, invalid input rejection, CORS and rate limiting. `TestSlotValidation` checks temporal boundaries. Schema cleanup occurs after the test. These passed locally on 2026-10-31. No production requests were made.
 
-## Limits and follow-up
-The demo rate limit is global per process, resets on restart and can deny legitimate traffic during abuse. It is a basic bound, not distributed abuse prevention. There is no cancellation, identity, payment, private booking lookup or operations mutation API. No holds or expiry are advertised.
+Run `make test` from the repository root. It supplies the loopback TEST_DATABASE_URL
+and runs `go test -race ./...` in backend. `TestIntegration` in
+`backend/internal/api/api_test.go` creates a unique schema, applies the migration
+twice, invokes handlers through httptest and drops that schema afterward. It uses
+real PostgreSQL but does not open a real HTTP listener. Never supply a production
+connection. Previous local runs passed; this documentation rewrite does not claim
+a fresh test run. Coverage details and gaps specific to this flow follow below.
 
-## Source organization after readability review
+## Sequence diagram
 
-Routing, middleware and JSON helpers remain in `backend/internal/api/api.go`.
-The availability handler lives in `backend/internal/api/availability.go`.
-Shared court configuration lookup and slot validation live in `backend/internal/api/slots.go`.
-These files share package `api`; file boundaries do not add runtime layers or change
-the documented call sequence. Handlers still call pgx directly; there is no separate
-service or repository layer. SQL parameters, response contracts and transaction
-boundaries are unchanged.
+```mermaid
+sequenceDiagram
+    participant W as Customer page
+    participant A as availability
+    participant S as getCourt / validSlot
+    participant D as PostgreSQL
+    W->>A: GET court/date
+    A->>S: getCourt(ctx, id)
+    S->>D: Join court and venue configuration
+    D-->>S: Price, hours, timezone
+    A->>D: Read confirmed intervals intersecting day
+    D-->>A: Occupied ranges
+    loop Each opening-hour start
+        A->>S: validSlot(start, now, court)
+        A->>A: Compare half-open intervals
+    end
+    A-->>W: 200 slots with UTC instants
+```

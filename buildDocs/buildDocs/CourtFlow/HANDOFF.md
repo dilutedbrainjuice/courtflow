@@ -168,3 +168,13 @@ comments. Pool ownership, deadlines, time rules, booking consistency and test
 isolation are now described at their relevant code boundaries. Changes contain
 only comments/gofmt alignment; comparison against HEAD and diff checks passed.
 Application tests not rerun; behavior and SA call chains are unchanged.
+
+## SA-006 — onboarding-oriented system analysis
+
+All seven flow documents in system-analysis were rewritten against fecc983 with
+Chisle off, and TEMPLATE now requires explanatory prose and precise coverage.
+Read customer-booking for the user journey, then facilities/courts, availability,
+booking and the health/local-database documents for runtime and local operations.
+Each names real source functions and explains errors/transactions/consistency.
+Coverage gaps and implementation limitations are explicit; no application tests
+were rerun for this documentation-only change. Deployment state is unchanged.

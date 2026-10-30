@@ -172,3 +172,17 @@ Final browser regression: all five Playwright tests passed; git diff --check pas
   and whitespace removed confirmed no executable-code changes in all seven files.
   Application tests were not rerun for this comments-only change; prior behavior
   verification remains in QUALITY-001. No cloud actions or deployment.
+
+## 2026-10-31 — SA-006: comprehensive explanatory SA rewrite
+
+- Applied system-analysis skill with Chisle off; rechecked Go, React, SQL, local
+  database scripts, smoke scripts and test assertions against source fecc983.
+- Rewrote all seven flow documents and expanded TEMPLATE guidance. Documents now
+  explain purpose, contracts, actual numbered calls, significant helpers, rules,
+  SQL/transactions, failure recovery, concurrency, source references and diagrams.
+- Replaced generic copied claims with endpoint-specific coverage and explicit gaps.
+  Clarified lazy pool readiness, shutdown drain limitation, empty catalog behavior,
+  date-versus-instant horizon, invalid timezone differences and lost-response risk.
+  Frontend cancellation claims now distinguish abort wiring from response guards.
+- Validation: reviewed source references, Markdown fences, section coverage and
+  git diff --check. Documentation only; application tests not rerun. No deployment.
