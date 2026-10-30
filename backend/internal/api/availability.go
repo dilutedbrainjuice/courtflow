@@ -9,6 +9,8 @@ import (
 	"github.com/jackc/pgx/v5"
 )
 
+// availability offers one-hour sessions for a court on a venue-local calendar date.
+// Results are a snapshot: only a later booking INSERT can reserve a session.
 func (a *API) availability(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil || id < 1 {
@@ -29,6 +31,9 @@ func (a *API) availability(w http.ResponseWriter, r *http.Request) {
 		fail(w, http.StatusInternalServerError, "invalid venue timezone")
 		return
 	}
+	// Interpret the requested date at venue midnight, rather than UTC midnight.
+	// Date validation admits day 30; validSlot still checks each start against
+	// the exact booking horizon, so some sessions on that date may be unavailable.
 	day, err := time.ParseInLocation("2006-01-02", r.URL.Query().Get("date"), loc)
 	now := time.Now()
 	today := time.Date(now.In(loc).Year(), now.In(loc).Month(), now.In(loc).Day(), 0, 0, 0, 0, loc)
@@ -36,6 +41,8 @@ func (a *API) availability(w http.ResponseWriter, r *http.Request) {
 		fail(w, http.StatusBadRequest, "date must be within 30 days")
 		return
 	}
+	// Read confirmed intervals intersecting [day, next local midnight).
+	// The strict inequalities exclude bookings that only touch a day boundary.
 	rows, err := a.DB.Query(r.Context(), `
 		SELECT start_at,end_at
 		FROM bookings
@@ -64,7 +71,8 @@ func (a *API) availability(w http.ResponseWriter, r *http.Request) {
 		s := day.Add(time.Duration(h) * time.Hour)
 		e := s.Add(time.Hour)
 		available := validSlot(s, now, c)
-		// Half-open intervals allow adjacent sessions to share an endpoint.
+		// [start, end) intervals overlap only when each starts before the other ends.
+		// A session ending exactly when another starts remains bookable.
 		for _, b := range occupied {
 			if s.Before(b[1]) && e.After(b[0]) {
 				available = false

@@ -158,3 +158,17 @@ Final browser regression: all five Playwright tests passed; git diff --check pas
   comment/review passes before final validation. Chisle remains off through review
   and documentation. No application behavior changed; application tests not rerun.
 - Validation: reviewed instruction order and git diff --check.
+
+## 2026-10-31 — COMMENTS-005: Go explanatory comment pass
+
+- Re-read all seven Go source/test files and the SQL migration with Chisle off.
+- Rewrote comments across startup, routing, catalog, slot rules, availability,
+  booking and tests. Explained pool ownership/lazy connectivity, exact origins,
+  deadline scope, venue-date versus instant validation, half-open overlap,
+  server pricing, constraint conflicts and committed-but-lost response behavior.
+- Corrected API ownership wording: main creates/closes the pool; API holds it.
+  Test comments explain schema isolation, migration repeats and concurrency intent.
+- Validation: gofmt, git diff --check, and comparison against HEAD with comments
+  and whitespace removed confirmed no executable-code changes in all seven files.
+  Application tests were not rerun for this comments-only change; prior behavior
+  verification remains in QUALITY-001. No cloud actions or deployment.

@@ -5,11 +5,15 @@ import (
 	"time"
 )
 
+// court combines court pricing with the opening schedule inherited from its venue.
+// Price is integer Malaysian sen; Open and Close are whole hours in Zone.
 type court struct {
 	Price, Open, Close int
 	Zone               string
 }
 
+// getCourt loads the configuration shared by availability and booking validation.
+// A missing court returns pgx.ErrNoRows; other errors are passed to the handler.
 func (a *API) getCourt(ctx context.Context, id int) (court, error) {
 	var c court
 	err := a.DB.QueryRow(ctx, `
@@ -21,7 +25,10 @@ func (a *API) getCourt(ctx context.Context, id int) (court, error) {
 	return c, err
 }
 
-// validSlot checks a future, whole-hour start against the venue clock and booking horizon.
+// validSlot checks start-time eligibility, not occupancy. A start must be strictly
+// after now, no later than now.AddDate(0, 0, 30), and on a whole hour in the venue
+// timezone. Close is exclusive, so the last one-hour session starts at Close - 1.
+// Invalid timezone configuration makes the start ineligible.
 func validSlot(t, now time.Time, c court) bool {
 	loc, err := time.LoadLocation(c.Zone)
 	if err != nil {

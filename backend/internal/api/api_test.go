@@ -13,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// TestSlotValidation uses a fixed clock to check slot boundaries deterministically.
 func TestSlotValidation(t *testing.T) {
 	c := court{Open: 8, Close: 23, Zone: "Asia/Kuala_Lumpur"}
 	now := time.Date(2026, 10, 31, 0, 0, 0, 0, time.UTC)
@@ -25,6 +26,9 @@ func TestSlotValidation(t *testing.T) {
 		}
 	}
 }
+
+// TestIntegration exercises the real HTTP handlers and PostgreSQL constraints.
+// It requires a loopback database and keeps application tables in a temporary schema.
 func TestIntegration(t *testing.T) {
 	url := os.Getenv("TEST_DATABASE_URL")
 	if url == "" {
@@ -43,6 +47,8 @@ func TestIntegration(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer admin.Close()
+	// A unique search_path isolates tables from developer data. The shared public
+	// schema remains visible so the btree_gist extension can be reused.
 	schema := fmt.Sprintf("test_%d", time.Now().UnixNano())
 	if _, err = admin.Exec(ctx, "CREATE SCHEMA "+schema); err != nil {
 		t.Fatal(err)
@@ -58,6 +64,7 @@ func TestIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// The initial migration must tolerate a repeat without duplicating seed rows.
 	for range 2 {
 		if _, err = pool.Exec(ctx, string(sql)); err != nil {
 			t.Fatal(err)
@@ -78,6 +85,8 @@ func TestIntegration(t *testing.T) {
 	body := func(id int, s time.Time) string {
 		return fmt.Sprintf(`{"court_id":%d,"start_at":%q}`, id, s.Format(time.RFC3339))
 	}
+	// Contend for the same court and interval. Exactly one request should commit;
+	// all others must become HTTP conflicts, with only one row stored.
 	var wg sync.WaitGroup
 	codes := make(chan int, 24)
 	for range 24 {
@@ -104,6 +113,7 @@ func TestIntegration(t *testing.T) {
 	if err = pool.QueryRow(ctx, "SELECT count(*) FROM bookings WHERE court_id=1").Scan(&count); err != nil || count != 1 {
 		t.Fatalf("count=%d err=%v", count, err)
 	}
+	// Adjacent sessions and simultaneous sessions on other courts must still work.
 	for _, b := range []string{body(1, start.Add(time.Hour)), body(2, start)} {
 		if code := post(b); code != 201 {
 			t.Errorf("adjacent/different court: %d", code)
@@ -128,6 +138,8 @@ func TestIntegration(t *testing.T) {
 	if w.Code != 403 {
 		t.Error("origin accepted")
 	}
+	// Place the counter at the cap directly so this assertion does not depend
+	// on the number of requests made by earlier scenarios.
 	a.mu.Lock()
 	a.attempts = 120
 	a.window = time.Now()

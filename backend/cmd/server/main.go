@@ -16,6 +16,8 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
+// main assembles the database pool and HTTP server from environment settings.
+// Schema migrations are a separate operator step; startup never changes the schema.
 func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
@@ -24,16 +26,19 @@ func main() {
 		slog.Error("invalid database configuration")
 		os.Exit(1)
 	}
+	// Bound database usage per API process without keeping idle connections open.
 	cfg.MaxConns = 8
 	cfg.MinConns = 0
 	cfg.MaxConnIdleTime = 5 * time.Minute
 	cfg.ConnConfig.ConnectTimeout = 5 * time.Second
+	// Pool creation does not prove database readiness; connections are opened as needed.
 	pool, err := pgxpool.NewWithConfig(ctx, cfg)
 	if err != nil {
 		slog.Error("database setup failed")
 		os.Exit(1)
 	}
 	defer pool.Close()
+	// Origins must match browser Origin headers exactly, including scheme and port.
 	origins := map[string]bool{}
 	for _, o := range strings.Split(os.Getenv("ALLOWED_ORIGINS"), ",") {
 		if o != "" {
@@ -54,6 +59,8 @@ func main() {
 		IdleTimeout:       60 * time.Second,
 		MaxHeaderBytes:    8192,
 	}
+	// On termination, stop accepting requests and give active handlers up to ten
+	// seconds to finish. Use a fresh context because the signal context is canceled.
 	go func() {
 		<-ctx.Done()
 		c, cancel := context.WithTimeout(context.Background(), 10*time.Second)

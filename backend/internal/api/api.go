@@ -1,3 +1,5 @@
+// Package api serves the public CourtFlow demo endpoints using a shared pgx pool.
+// Handlers validate requests and execute SQL directly; PostgreSQL enforces booking overlap.
 package api
 
 import (
@@ -10,30 +12,36 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// API owns the shared database pool, allowed browser origins and booking limiter.
-// Configure DB and Origins before serving requests; do not mutate them afterward.
+// API holds the dependencies and attempt counter shared by concurrent handlers.
+// The caller creates and closes DB. Set DB and Origins before serving requests,
+// then leave both fields unchanged. Do not copy an API after it is first used.
 type API struct {
-	DB       *pgxpool.Pool
-	Origins  map[string]bool
+	DB      *pgxpool.Pool
+	Origins map[string]bool
+	// mu protects window and attempts only; database constraints protect bookings.
 	mu       sync.Mutex
 	window   time.Time
 	attempts int
 }
 
-// JSON writes a JSON response after committing the supplied HTTP status.
+// JSON sets the response content type and status, then encodes value.
+// Encoding or write errors cannot change the status once headers have been sent.
 func JSON(w http.ResponseWriter, status int, value any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(value)
 }
 
+// fail returns a public error message without exposing database or driver details.
 func fail(w http.ResponseWriter, code int, message string) {
 	JSON(w, code, map[string]string{"error": message})
 }
 
-// Handler registers routes and applies common headers, CORS and request deadlines.
+// Handler returns the routes wrapped in origin filtering and a database-work deadline.
+// Requests without Origin are allowed: this browser policy is not authentication.
 func (a *API) Handler() http.Handler {
 	m := http.NewServeMux()
+	// Liveness stays independent of database connectivity.
 	m.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
 		JSON(w, http.StatusOK, map[string]string{"status": "ok"})
 	})
@@ -58,6 +66,8 @@ func (a *API) Handler() http.Handler {
 			w.WriteHeader(http.StatusNoContent)
 			return
 		}
+		// Handlers pass this context to pgx. This bounds database work; transport
+		// read/write timeouts are configured separately on the HTTP server.
 		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 		defer cancel()
 		m.ServeHTTP(w, r.WithContext(ctx))

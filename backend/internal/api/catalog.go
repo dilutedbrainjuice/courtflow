@@ -5,6 +5,7 @@ import (
 	"strconv"
 )
 
+// facilities lists public venue identities and their display timezones, ordered by ID.
 func (a *API) facilities(w http.ResponseWriter, r *http.Request) {
 	rows, err := a.DB.Query(r.Context(), `
 		SELECT id,name,timezone
@@ -16,6 +17,7 @@ func (a *API) facilities(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer rows.Close()
+	// Initialize an empty slice so a catalog with no rows is encoded as [], not null.
 	out := []map[string]any{}
 	for rows.Next() {
 		var id int
@@ -33,6 +35,8 @@ func (a *API) facilities(w http.ResponseWriter, r *http.Request) {
 	JSON(w, http.StatusOK, out)
 }
 
+// courts lists names and hourly prices for a positive facility ID.
+// An unknown facility returns an empty list, just like a facility with no courts.
 func (a *API) courts(w http.ResponseWriter, r *http.Request) {
 	id, err := strconv.Atoi(r.PathValue("id"))
 	if err != nil || id < 1 {
@@ -50,6 +54,7 @@ func (a *API) courts(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer rows.Close()
+	// Initialize an empty slice so a catalog with no rows is encoded as [], not null.
 	out := []map[string]any{}
 	for rows.Next() {
 		var id, price int

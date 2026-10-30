@@ -160,3 +160,11 @@ finished code and write clear, accurate explanatory comments before proceeding t
 code review, final local validation and SA. Keep Chisle off throughout those steps.
 If implementation fixes follow, repeat the comment/review passes. This supersedes
 older wording that stops Chisle only when SA writing begins.
+
+## COMMENTS-005 — Go comments reviewed with Chisle off
+
+Re-read every Go source/test file against the migration and rewrote explanatory
+comments. Pool ownership, deadlines, time rules, booking consistency and test
+isolation are now described at their relevant code boundaries. Changes contain
+only comments/gofmt alignment; comparison against HEAD and diff checks passed.
+Application tests not rerun; behavior and SA call chains are unchanged.
