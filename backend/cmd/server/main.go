@@ -2,8 +2,6 @@ package main
 
 import (
 	"context"
-	"courtflow/internal/api"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"log/slog"
 	"net/http"
 	"os"
@@ -11,7 +9,11 @@ import (
 	"strings"
 	"syscall"
 	"time"
-	_ "time/tzdata"
+	_ "time/tzdata" // Embed venue timezone rules in minimal deployment images.
+
+	"courtflow/internal/api"
+
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 func main() {
@@ -43,7 +45,15 @@ func main() {
 	if port == "" {
 		port = "8080"
 	}
-	srv := &http.Server{Addr: ":" + port, Handler: a.Handler(), ReadHeaderTimeout: 5 * time.Second, ReadTimeout: 10 * time.Second, WriteTimeout: 10 * time.Second, IdleTimeout: 60 * time.Second, MaxHeaderBytes: 8192}
+	srv := &http.Server{
+		Addr:              ":" + port,
+		Handler:           a.Handler(),
+		ReadHeaderTimeout: 5 * time.Second,
+		ReadTimeout:       10 * time.Second,
+		WriteTimeout:      10 * time.Second,
+		IdleTimeout:       60 * time.Second,
+		MaxHeaderBytes:    8192,
+	}
 	go func() {
 		<-ctx.Done()
 		c, cancel := context.WithTimeout(context.Background(), 10*time.Second)

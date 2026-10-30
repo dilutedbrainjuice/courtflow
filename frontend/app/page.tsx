@@ -42,18 +42,19 @@ export default function Home() {
   const [lastDay] = useState(() =>
     localDate(new Date(Date.now() + 30 * 86400000)),
   );
-  const [courts, setCourts] = useState<Court[]>([]),
-    [court, setCourt] = useState(1),
-    [date, setDate] = useState(() => localDate(new Date())),
-    [slots, setSlots] = useState<Slot[]>([]),
-    [selected, setSelected] = useState<Slot | null>(null),
-    [loading, setLoading] = useState(true),
-    [pending, setPending] = useState(false),
-    [error, setError] = useState(""),
-    [notice, setNotice] = useState(""),
-    [refresh, setRefresh] = useState(0),
-    [venue, setVenue] = useState("CourtFlow Demo Badminton");
+  const [courts, setCourts] = useState<Court[]>([]);
+  const [court, setCourt] = useState(1);
+  const [date, setDate] = useState(() => localDate(new Date()));
+  const [slots, setSlots] = useState<Slot[]>([]);
+  const [selected, setSelected] = useState<Slot | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+  const [refresh, setRefresh] = useState(0);
+  const [venue, setVenue] = useState("CourtFlow Demo Badminton");
   useEffect(() => {
+    // Cancel discovery when a refresh replaces it or the page unmounts.
     const ctrl = new AbortController();
     request("/api/v1/facilities", { signal: ctrl.signal })
       .then((data) => {
@@ -67,6 +68,7 @@ export default function Home() {
     return () => ctrl.abort();
   }, [refresh]);
   useEffect(() => {
+    // Cancel the previous request when this selection changes or the page unmounts.
     const ctrl = new AbortController();
     request(`/api/v1/courts/${court}/availability?date=${date}`, {
       signal: ctrl.signal,

@@ -1,38 +1,10 @@
 # CourtFlow
 
-Sports facility booking and management platform planned with Go, Next.js and
-PostgreSQL. This repository currently contains development configuration and
-documentation only.
+A public portfolio demo for badminton court bookings, built with Go, Next.js and
+PostgreSQL. No real payments or personal details are collected.
 
-## Layout
-
-- `DEVELOPMENT.md`: permanent development requirements; read before making changes.
-- `scripts/`: local environment checks.
-- `buildDocs/buildDocs/CourtFlow/`: Obsidian architecture, flow analysis, build log and handoff.
-- Future application directories: `backend/` (Go) and `frontend/` (Next.js).
-
-## Local workflow
-
-Run `make check-env` to inspect tools and `make check` for repository checks.
-No application dependencies, build commands or application tests exist yet.
-Do not interpret repository checks as application test coverage.
-
-At the first implementation, add Go modules and npm manifests with a lockfile,
-then document exact install, development, build, lint and test commands here.
-Use `gofmt` for Go; configure one frontend formatter and linter at that time.
-Run Next.js and Go locally and use local PostgreSQL with mock payments.
-
-Podman is installed. The intended database setup is a local PostgreSQL container
-with a named volume and a port bound to `127.0.0.1` only. Select and pin its image
-version and provide placeholder environment configuration when provisioning it.
-No image has been downloaded and no database has been created. A native local
-PostgreSQL installation is an alternative if Podman cannot run.
-
-Run relevant local tests before each completed implementation changeset, update
-flow documentation, append the build log, update handoff, and inspect the Git diff.
-Never use production data for tests. Deployment requires passing local tests and
-explicit approval. No remote repository or deployment is configured; the eventual
-GitHub repository must be public. Keep secrets and personal vault settings out of Git.
+Read [the repository and SA guide](docs/READING_GUIDE.md) for the component map,
+source-reading order and system-analysis walkthrough.
 
 ## V1 implementation (supersedes the initial setup status above)
 
@@ -95,5 +67,6 @@ separate reception list is deferred. Basic booking abuse control caps total
 attempts at 120/minute per process; it is deliberately simple and resets on restart.
 Health checks report process liveness, not database readiness.
 
-See `docs/PRODUCTION_RUNBOOK.md` for the approval-gated release. No remote exists,
-no hosting resources have been created, and no deployment has occurred.
+The public demo is https://courtflow-demo.vercel.app. See `docs/PRODUCTION_RUNBOOK.md`
+for manual releases. Git pushes do not automatically deploy. Local changes require a
+new approved release before they appear in production.

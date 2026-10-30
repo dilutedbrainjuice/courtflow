@@ -3,13 +3,14 @@ package api
 import (
 	"context"
 	"fmt"
-	"github.com/jackc/pgx/v5/pgxpool"
 	"net/http/httptest"
 	"os"
 	"strings"
 	"sync"
 	"testing"
 	"time"
+
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 func TestSlotValidation(t *testing.T) {

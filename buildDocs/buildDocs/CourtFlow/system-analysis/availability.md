@@ -61,3 +61,13 @@ sequenceDiagram
 
 ## Limits and follow-up
 The demo rate limit is global per process, resets on restart and can deny legitimate traffic during abuse. It is a basic bound, not distributed abuse prevention. There is no cancellation, identity, payment, private booking lookup or operations mutation API. No holds or expiry are advertised.
+
+## Source organization after readability review
+
+Routing, middleware and JSON helpers remain in `backend/internal/api/api.go`.
+The availability handler lives in `backend/internal/api/availability.go`.
+Shared court configuration lookup and slot validation live in `backend/internal/api/slots.go`.
+These files share package `api`; file boundaries do not add runtime layers or change
+the documented call sequence. Handlers still call pgx directly; there is no separate
+service or repository layer. SQL parameters, response contracts and transaction
+boundaries are unchanged.

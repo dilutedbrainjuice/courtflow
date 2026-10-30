@@ -146,3 +146,26 @@ local V1 implementation, dependency installation, Podman PostgreSQL, tests and l
 commits. Follow `CODEX_START_HERE.md`, `WORKFLOW_ADDENDUM.md` and `docs/` requirements.
 Git is initialized; do not reinitialize it. Cloud creation, remote pushes, Neon
 migrations and deployment still require explicit approval.
+
+## Required maintainability and code review gate
+
+After implementation, before final validation and documentation, review the complete
+changed flow and its callers/tests for readability, correctness and maintainability.
+This gate applies to Go, TypeScript/React, SQL, scripts and configuration.
+
+- Prefer clear names, explicit control flow, small cohesive functions and files grouped
+  by responsibility. Do not compress unrelated declarations or hide errors to save lines.
+- Go: use gofmt, standard-library conventions, explicit errors and composition. Apply
+  SOLID's responsibility/dependency principles pragmatically; introduce small interfaces
+  at actual consumer boundaries only when substitution is needed. Do not manufacture
+  service/repository layers, inheritance analogues or one-method interfaces for ceremony.
+- Comments explain why, invariants, concurrency, units, non-obvious decisions and public
+  contracts. Avoid narrating obvious statements. Keep SQL readable and parameterized.
+- React: keep state transitions understandable; review effect dependencies/cancellation,
+  loading/error states, accessibility and API boundaries. Extract components/helpers when
+  they have a distinct responsibility, not solely to reduce file length.
+- Review behavior compatibility, validation, error paths, races, security, resource
+  cleanup and test coverage. Formatting and passing tests do not replace code review.
+- Fix findings, rerun affected local checks, and update SA call chains/source references.
+  Record review scope, results and remaining limitations in the build log/handoff.
+- Chisle never overrides readability, comments, this review gate or complete documentation.

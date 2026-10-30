@@ -125,3 +125,25 @@
   team summary; no claim of independent Hobby billing verification.
 - Updated HANDOFF/runbook/log; previous local verification receipt still applies.
   Next: owner can share public demo; follow manual release and retention policy.
+
+## 2026-10-31 — QUALITY-001: readability and review workflow
+
+- Reviewed backend startup/routes/handlers/SQL/tests, frontend page/layout/styles/
+  browser tests, local scripts and deployment configuration for maintainability.
+- Split API code by responsibility into catalog.go, slots.go, availability.go and
+  booking.go; retained one api package and explicit pgx dependency. Expanded SQL,
+  server settings, state declarations and validation predicates; documented pricing,
+  overlap, limiter and timezone invariants. HTTP contracts remain unchanged.
+- Added mandatory post-implementation maintainability/code review gate to DEVELOPMENT
+  and WORKFLOW_ADDENDUM. Chisle stopped before explanatory documentation.
+- Updated four SA source maps, corrected stale README setup claims and wrote
+  docs/READING_GUIDE.md covering every runtime/support component and SA reading order.
+- Verification: make verify-local passed (format, vet, unit/integration/race, Go
+  compile, npm ci/lint/typecheck/build). After SQL formatting, make test passed again.
+  Initial sandbox run could not write Go cache; authorized local rerun passed.
+- Review limitations: this is a focused readability refactor, not a new layered
+  architecture. Response maps remain dynamic and frontend request JSON is unvalidated
+  at runtime; typed contracts can be a separate improvement as the API expands.
+- No production resources changed and no new deployment performed.
+
+Final browser regression: all five Playwright tests passed; git diff --check passed.

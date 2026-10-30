@@ -140,3 +140,15 @@ This snapshot supersedes pending deployment statements above.
 - Local application code unchanged; previous local tests remain the verification
   receipt. Release documentation committed locally; deployed application commit
   stays 60c498a. Retention/cold-start limitations remain in the runbook.
+
+## QUALITY-001 — readability review (local changes, not deployed)
+
+API files now separate routing/middleware (api.go), catalog reads (catalog.go),
+shared slot rules (slots.go), availability and booking. Same package and behavior.
+Frontend state declarations and backend SQL/configuration are expanded for reading.
+Required workflow now includes maintainability/code review after implementation.
+Start with docs/READING_GUIDE.md for the full repository and SA walkthrough.
+make verify-local and final backend race/integration tests passed. Production still
+runs 60c498a; this refactor needs a separately approved manual release.
+
+Final browser regression: all five Playwright tests passed; git diff --check passed.
