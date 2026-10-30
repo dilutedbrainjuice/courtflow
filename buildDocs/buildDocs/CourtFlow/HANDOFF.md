@@ -61,3 +61,11 @@ Implementation commit: `1da4803`. Final lockfile-based `make verify-local` passe
 Five browser tests passed separately. No remote configured. PostgreSQL remains
 running locally; API smoke containers were removed and test records cleaned up.
 ESLint 9 reports an upstream support deprecation warning, with no lint failures.
+
+## Release continuation — owner authorization received
+Owner approved public publication and demo setup/deployment. Origin is now
+https://github.com/dilutedbrainjuice/courtflow.git. Push remains blocked by missing
+HTTPS GitHub authentication. Neon/Render/Vercel MCPs report OAuth, but their tools
+are not exposed in this running chat. No cloud resources, migration or deployment
+performed. Continue with existing authorization after Git authentication and tool
+availability are resolved; do not ask for the same release approval again.

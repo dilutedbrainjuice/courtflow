@@ -71,3 +71,15 @@
   integration and production-image HTTP smoke tests. No cloud verification performed.
 - Next action: owner review and explicit publication/release authorization, then
   account setup and minimal manual production smoke checks per runbook.
+
+## 2026-10-31 — RELEASE-001: approved publication, access checks
+
+- Owner approved GitHub publication and demo production setup/deployment, then
+  supplied https://github.com/dilutedbrainjuice/courtflow.git.
+- Added that repository as local origin; remote inspection showed no main branch.
+- Neon, Render and Vercel configured MCP servers report OAuth authentication.
+  Provider tools are not exposed to this running chat; no provider resources changed.
+- Push did not complete: HTTPS Git credentials are unavailable (noninteractive
+  check failed reading GitHub username). No remote branch or deployment claimed.
+- Next: owner authenticates Git push locally and pushes main; reopen/reload Codex
+  to expose newly authenticated provider tools, then continue the approved release.
