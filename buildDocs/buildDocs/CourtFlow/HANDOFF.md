@@ -1,7 +1,7 @@
 # CourtFlow handoff
 
 ## Current development state — 2026-10-31
-Local V1 implemented. Git branch main; public GitHub published. Release in progress. See BUILD_LOG for
+Local V1 implemented. Git branch main; public GitHub published. First manual release verified. See BUILD_LOG for
 append-only results and local Git history for commits. Original vault content and
 paths preserved. Read AGENTS, DEVELOPMENT, CODEX_START_HERE and WORKFLOW_ADDENDUM.
 
@@ -107,3 +107,36 @@ availability are resolved; do not ask for the same release approval again.
   project or deployment exists yet. No end-to-end booking smoke performed yet.
 - Continue using existing owner release approval. Do not recreate Neon resources,
   rerun migration unnecessarily, or deploy automatically on Git pushes.
+
+## RELEASE-003 — 2026-10-31 MYT: first release complete
+
+This snapshot supersedes pending deployment statements above.
+- Public frontend: https://courtflow-demo.vercel.app
+- API: https://courtflow-api-gqes.onrender.com
+- Vercel project `prj_vprkX5t78NS3vomgUaStzLpSzDTp`, team
+  `team_CIAncTjfDuRgAoEHPUGPo0xa`. Production deployment
+  `dpl_omFhfNnoMuKe9UALXrMJ5C32bwDR` READY; approved commit `60c498a`.
+  Root frontend, Node 22, public API URL configured for production. Build completed
+  in 21 seconds; public site opened successfully. No plan upgrades purchased;
+  team API summary does not expose billing-plan details, so Hobby was not separately
+  verified through that response.
+- Owner completed Vercel team grant and Render health path `/healthz`; verified.
+  Owner additionally approved disabling Vercel Authentication for public demo access
+  after automatic review initially rejected that setting. Update succeeded and
+  provider reports ssoProtection disabled.
+- Render ALLOWED_ORIGINS is exactly https://courtflow-demo.vercel.app. Verified
+  facilities GET returned 200 with matching Access-Control-Allow-Origin header.
+  Environment writes trigger API deployments even with Git auto-deploy disabled.
+  An extra explicit trigger queued one redundant build; latest live deploy is
+  `dep-dbie7m203lvs73akrn10`, finished 2026-10-30T18:38:06Z.
+- Browser loaded all four courts/availability and confirmed exactly one demo booking.
+  Reference `76af2022-7a95-4dc1-bc74-b7244847007f`: Court A, 2026-10-31
+  09:00–10:00 MYT, 2500 sen, confirmed. UI showed confirmation and disabled the
+  occupied slot; targeted DB read confirmed the persisted row. No second booking
+  or production concurrency/load test. Screenshot inspected in browser tool.
+- Vercel runtime error scan for the past hour returned none. Render remains Free,
+  autoDeploy no / autoDeployTrigger off, health path /healthz. Approved source
+  frontend/vercel.json has git.deploymentEnabled=false. No Blueprint exists.
+- Local application code unchanged; previous local tests remain the verification
+  receipt. Release documentation committed locally; deployed application commit
+  stays 60c498a. Retention/cold-start limitations remain in the runbook.

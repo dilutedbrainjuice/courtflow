@@ -105,3 +105,23 @@
   single essential GET /healthz returned HTTP 200 and {"status":"ok"}. Brief logs
   confirmed live service. Frontend and end-to-end booking remain pending owner
   Vercel grant. git diff --check passed. No code changes or local test reruns.
+
+## 2026-10-31 — RELEASE-003: frontend deployment and essential booking smoke
+
+- Verified owner-completed Render health path and Vercel team authorization.
+- Created CourtFlow Vercel project rooted at frontend, Node 22, production API URL;
+  manually deployed 60c498a. Deployment READY; build completed in 21 seconds.
+- Owner explicitly approved public access after automatic review blocked removal
+  of Vercel Authentication. Public setting applied successfully.
+- Set exact CORS origin https://courtflow-demo.vercel.app, verified HTTP 200 and
+  matching CORS header. Render env updates trigger deployment; an extra manual API
+  trigger queued a redundant build. Final live deploy dep-dbie7m203lvs73akrn10.
+- One browser booking confirmed, reference 76af2022-7a95-4dc1-bc74-b7244847007f.
+  Court A, 31 October 2026 09:00–10:00 MYT, RM25 simulated. UI confirmation and
+  unavailable slot observed; targeted database read confirmed persistence.
+- Vercel runtime error scan returned none. Render auto-deploy off and /healthz
+  verified. Source Vercel git.deploymentEnabled false verified. No load tests,
+  extra bookings, paid upgrades or code changes. Vercel billing plan not exposed by
+  team summary; no claim of independent Hobby billing verification.
+- Updated HANDOFF/runbook/log; previous local verification receipt still applies.
+  Next: owner can share public demo; follow manual release and retention policy.
