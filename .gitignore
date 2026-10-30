@@ -1,0 +1,28 @@
+# Secrets and local configuration
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+# Dependencies and generated outputs
+node_modules/
+.next/
+out/
+dist/
+build/
+bin/
+coverage/
+*.test
+*.log
+# Personal editor and Obsidian state
+.obsidian/
+.trash/
+.DS_Store
+.idea/
+.vscode/
+# Local database data
+.pgdata/
+*.tsbuildinfo
+courtflow_codex_handoff_pack.zip
+frontend/test-results/
+frontend/playwright-report/

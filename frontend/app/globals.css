@@ -1,0 +1,250 @@
+:root {
+  font-family: Arial, Helvetica, sans-serif;
+  color: #182f2b;
+  background: #f3f5ef;
+}
+* {
+  box-sizing: border-box;
+}
+body {
+  margin: 0;
+}
+main {
+  max-width: 1200px;
+  margin: auto;
+  padding: 28px 40px;
+}
+header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.brand {
+  font-size: 25px;
+  font-weight: 800;
+  text-decoration: none;
+  color: inherit;
+}
+.badge,
+.eyebrow {
+  font-size: 11px;
+  letter-spacing: 2px;
+  font-weight: 700;
+}
+.badge {
+  padding: 10px 14px;
+  border: 1px solid #c8d2c4;
+  border-radius: 30px;
+}
+.hero {
+  padding: 68px 0 42px;
+  position: relative;
+}
+.hero:after {
+  content: "+";
+  position: absolute;
+  right: 5%;
+  top: 45px;
+  font-size: 220px;
+  line-height: 1;
+  color: #dbe6ca;
+  transform: rotate(20deg);
+  z-index: -1;
+}
+h1 {
+  font-size: clamp(48px, 7vw, 82px);
+  letter-spacing: -4px;
+  line-height: 1.02;
+  margin: 20px 0;
+}
+em {
+  font-style: normal;
+  color: #638735;
+}
+.hero > p:not(.eyebrow) {
+  max-width: 430px;
+  color: #61706b;
+  line-height: 1.6;
+}
+.venue {
+  margin-top: 28px;
+  font-weight: 700;
+}
+.venue small {
+  display: block;
+  margin-top: 9px;
+  color: #718079;
+  font-weight: 400;
+}
+.booking {
+  background: #fff;
+  padding: 32px;
+  border: 1px solid #e1e6dd;
+  border-radius: 20px;
+  box-shadow: 0 10px 40px #19302a06;
+}
+.sectionTitle {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+h2 {
+  margin: 8px 0 25px;
+  font-size: 28px;
+  letter-spacing: -1px;
+}
+.controls {
+  display: grid;
+  grid-template-columns: 210px 1fr;
+  gap: 25px;
+}
+label,
+legend {
+  font-size: 13px;
+  font-weight: 700;
+}
+input {
+  display: block;
+  width: 100%;
+  margin-top: 12px;
+  padding: 17px;
+  border: 1px solid #ccd5c8;
+  border-radius: 10px;
+  font: inherit;
+}
+fieldset {
+  border: 0;
+  padding: 0;
+  margin: 0;
+}
+.courts {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 10px;
+  margin-top: 12px;
+}
+button {
+  font: inherit;
+  cursor: pointer;
+  border: 1px solid #dce3d6;
+  border-radius: 10px;
+  padding: 14px;
+  background: white;
+  color: inherit;
+}
+button small {
+  display: block;
+  font-size: 11px;
+  margin-top: 7px;
+  color: #69786c;
+}
+.active {
+  background: #e9f2db;
+  border-color: #709647;
+  box-shadow: inset 0 0 0 1px #709647;
+}
+h3 {
+  margin-top: 30px;
+  font-size: 15px;
+}
+h3 span {
+  font-size: 12px;
+  color: #718079;
+  font-weight: 400;
+  margin-left: 10px;
+}
+.slots {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 10px;
+}
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+.review {
+  margin-top: 30px;
+  padding-top: 24px;
+  border-top: 1px solid #e5e8e1;
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+  align-items: center;
+}
+.review p {
+  font-size: 12px;
+  color: #718079;
+}
+.primary {
+  background: #23493a;
+  color: white;
+  font-weight: 700;
+}
+.secondary {
+  font-size: 12px;
+  padding: 9px 15px;
+}
+.error,
+.success {
+  padding: 15px;
+  border-radius: 8px;
+  overflow-wrap: anywhere;
+}
+.error {
+  background: #fff0ed;
+  color: #983e2c;
+}
+.success {
+  background: #edf6e5;
+  color: #355923;
+}
+footer {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: #718079;
+  padding: 26px 0;
+}
+button:focus-visible,
+input:focus-visible {
+  outline: 3px solid #b3ce70;
+  outline-offset: 3px;
+}
+@media (max-width: 700px) {
+  main {
+    padding: 20px;
+  }
+  .badge {
+    font-size: 8px;
+    letter-spacing: 1px;
+  }
+  .hero {
+    padding: 45px 0 30px;
+  }
+  .hero:after {
+    display: none;
+  }
+  .booking {
+    padding: 20px;
+  }
+  .controls {
+    grid-template-columns: 1fr;
+  }
+  .courts {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .slots {
+    grid-template-columns: repeat(3, 1fr);
+  }
+  .review,
+  footer {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  h1 {
+    letter-spacing: -2px;
+  }
+  footer {
+    gap: 12px;
+  }
+}
