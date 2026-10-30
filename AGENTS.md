@@ -37,7 +37,9 @@ requirements. The confirmed root is `/home/terasit/VSProjects/court`.
 ## V1 workflow
 
 Follow `WORKFLOW_ADDENDUM.md` and `CODEX_START_HERE.md`. Use repository Chisle only
-for implementation; explicitly stop it before system-analysis writing. Use
+for implementation; finish implementation, explicitly stop Chisle, and complete a
+clear explanatory comment pass before code review, final validation and
+system-analysis writing. Use
 `.agents/skills/local-first` for checks and `.agents/skills/system-analysis` for
 verified flow documentation. The setup-only statements above describe initial
 state; current architecture and commands belong in README and HANDOFF.

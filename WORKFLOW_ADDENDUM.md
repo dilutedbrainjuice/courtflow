@@ -8,11 +8,13 @@
 
 ## Required cycle for *each* logical feature/fix
 1. Inspect relevant source, API and docs; state scope.
-2. Coding task: invoke `$chisle` locally **only for implementation**; implement minimal complete solution with essential tests. Do not globally install Chisle for Codex.
-3. Test locally: Go unit/integration/race, local PostgreSQL, frontend lint/typecheck/build as relevant. Tests skipped are not passes.
-4. For docs: stop Chisle explicitly (`stop chisle`), preferably use a **new Codex documentation chat** invoking `$system-analysis`; do not load Chisle there. Analyze verified source and code flow comprehensively.
-5. Update flow-specific Obsidian Markdown; update BUILD_LOG.md (append), HANDOFF.md (replace current snapshot).
-6. Review `git diff --check`, `git status`, staged files and secrets; commit a logically cohesive changeset. Do not automatically deploy or push without user permission.
+2. Invoke `$chisle` locally **only for implementation**; finish the minimal complete solution and essential tests. Do not globally install Chisle.
+3. Explicitly `stop chisle`. Re-read the completed code and callers, then write or revise explanatory comments in normal, clear prose. Check intent, contracts, invariants and non-obvious decisions against the actual code; remove stale or misleading comments. Finish this pass before the next step.
+4. With Chisle off, perform maintainability review and code review of the complete changed flow.
+5. Test locally: Go unit/integration/race, local PostgreSQL, frontend lint/typecheck/build as relevant. Fix failures; if implementation changes, repeat the stop-Chisle/comment/review passes before final validation. Tests skipped are not passes.
+6. With Chisle still off, use `$system-analysis` to analyze verified source and update flow-specific Obsidian Markdown. A separate documentation chat is optional.
+7. Append BUILD_LOG.md and update HANDOFF.md.
+8. Review `git diff --check`, `git status`, staged files and secrets; commit a cohesive changeset. Do not automatically deploy or push without user permission.
 
 ## Costs and environments
 - Local development/testing ONLY. Production hosting and database for public recruiter demo, manual approved deploys only.
@@ -26,7 +28,8 @@ No feature is done without working code, relevant local checks, flow documentati
 
 ## Required maintainability and code review gate
 
-After implementation, before final validation and documentation, review the complete
+After implementation and the completed Chisle-off comment pass, before final
+validation and documentation, review the complete
 changed flow and its callers/tests for readability, correctness and maintainability.
 This gate applies to Go, TypeScript/React, SQL, scripts and configuration.
 

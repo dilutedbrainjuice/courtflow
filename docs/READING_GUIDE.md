@@ -114,7 +114,8 @@ Render → Neon; local verification uses Next.js → local Go → Podman Postgre
 
 ## Review and verification
 
-The required cycle now includes implementation → readability/code review → affected
+The required cycle now includes implementation → explicit stop Chisle → explanatory comment pass →
+readability/code review → affected
 local checks → full flow documentation → build log/handoff → reviewed commit.
 Use gofmt, Go vet/race/integration tests, frontend lint/typecheck/build and relevant
 browser checks. Comments should explain decisions and invariants, especially UTC

@@ -44,18 +44,24 @@ After deployment, run only essential smoke tests against a dedicated demo/test a
 
 Use Chisle rules ONLY during application code implementation.
 
-Disable Chisle-style constraints during system-analysis documentation.
+Explicitly stop Chisle after implementation, before the comment-writing pass.
+Keep it off during comments, code review, and system-analysis documentation.
 
 For every new or modified API/controller/business flow:
 
 1. Inspect the existing architecture and relevant code.
-2. Implement the smallest appropriate change.
-3. Run relevant local tests.
-4. Fix failing tests.
-5. Write or update its corresponding system-analysis document.
-6. Update the append-only build log.
-7. Update the model handoff file.
-8. Verify the Git diff before committing.
+2. Finish the smallest complete implementation and essential tests using local Chisle.
+3. Explicitly `stop chisle` before writing or revising explanatory comments.
+4. Re-read the finished implementation and its callers, then write clear comments
+   explaining intent, contracts, invariants and non-obvious decisions. Verify each
+   comment against the code; remove stale or misleading comments. Complete this
+   pass before proceeding to the next step.
+5. Perform the maintainability and code review gate with Chisle off.
+6. Run relevant local tests and fix failures. If implementation changes are needed,
+   repeat the stop-Chisle, comment and review passes before final validation.
+7. Write or update the corresponding system-analysis document with Chisle off.
+8. Update the append-only build log and model handoff file.
+9. Verify the Git diff before committing.
 
 Do not install a globally always-on Chisle ruleset.
 
@@ -149,7 +155,8 @@ migrations and deployment still require explicit approval.
 
 ## Required maintainability and code review gate
 
-After implementation, before final validation and documentation, review the complete
+After implementation and the completed Chisle-off comment pass, before final
+validation and documentation, review the complete
 changed flow and its callers/tests for readability, correctness and maintainability.
 This gate applies to Go, TypeScript/React, SQL, scripts and configuration.
 

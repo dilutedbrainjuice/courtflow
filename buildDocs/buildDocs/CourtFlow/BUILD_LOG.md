@@ -147,3 +147,14 @@
 - No production resources changed and no new deployment performed.
 
 Final browser regression: all five Playwright tests passed; git diff --check passed.
+
+## 2026-10-31 — WORKFLOW-004: comment pass after stopping Chisle
+
+- Owner requested finishing implementation before disabling Chisle and writing clear
+  comments, with that pass completed before proceeding.
+- Aligned DEVELOPMENT, WORKFLOW_ADDENDUM, AGENTS, CODEX_START_HERE and reading guide:
+  implementation → stop Chisle → comments → review → tests → SA → log/handoff → commit.
+- Comments must be checked against completed code. Implementation fixes repeat the
+  comment/review passes before final validation. Chisle remains off through review
+  and documentation. No application behavior changed; application tests not rerun.
+- Validation: reviewed instruction order and git diff --check.

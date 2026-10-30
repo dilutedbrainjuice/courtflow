@@ -152,3 +152,11 @@ make verify-local and final backend race/integration tests passed. Production st
 runs 60c498a; this refactor needs a separately approved manual release.
 
 Final browser regression: all five Playwright tests passed; git diff --check passed.
+
+## WORKFLOW-004 — comment-writing order
+
+Finish implementation with local Chisle, explicitly stop Chisle, then re-read the
+finished code and write clear, accurate explanatory comments before proceeding to
+code review, final local validation and SA. Keep Chisle off throughout those steps.
+If implementation fixes follow, repeat the comment/review passes. This supersedes
+older wording that stops Chisle only when SA writing begins.
