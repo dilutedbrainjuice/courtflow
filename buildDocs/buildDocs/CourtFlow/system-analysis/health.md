@@ -1,6 +1,6 @@
 # Health and process lifecycle
 
-Verified against repository source at `fecc983`; this is a description of the current implementation.
+Verified against the RELIABILITY-010 working tree, 2026-11-01 MYT. See RELIABILITY_RESULTS.md for fresh checks.
 
 ## Business purpose
 
@@ -18,13 +18,15 @@ No body or parameters are required. Success is HTTP 200 with `{"status":"ok"}`. 
 
 1. main reads DATABASE_URL and configures pgx, then creates API with an exact origin allowlist from comma-separated ALLOWED_ORIGINS.
 2. API.Handler registers an inline health function and returns the common wrapper.
-3. ListenAndServe accepts the request; the wrapper checks Origin and attaches a deadline.
+3. main creates a TCP listener; serve starts Server.Serve and coordinates its exit with the signal context. The wrapper observes request ID/status, checks Origin and attaches a deadline.
 4. The inline function calls JSON with status 200 and the status map. No pgx method is invoked.
-5. On SIGINT/SIGTERM, a separate goroutine calls Server.Shutdown with a fresh ten-second context. ListenAndServe returning ErrServerClosed is treated as normal exit.
+5. On SIGINT/SIGTERM, serve calls Shutdown with a fresh ten-second context and waits. Accepted handlers retain their work contexts during graceful drain.
+6. On drain expiry, serve cancels work and closes active connections. A mutex gates new handler admission before waiting on the active-handler WaitGroup, preventing Add/Wait races. It allows one additional second for cleanup.
+7. Normal completion returns to main, which closes the pool. Unexpected serve/drain errors produce nonzero exit after cleanup. A handler still stuck after forced cleanup returns errHandlersStuck; main logs and exits without blocking on pool.Close.
 
 ## Functions and responsibilities
 
-`main()` owns startup and resources. `API.Handler() http.Handler` assembles routing and middleware. The inline health handler takes writer/request and writes its result using JSON. Signal.NotifyContext supplies cancellation for shutdown coordination. main defers pool.Close and the signal stop function.
+`main()` owns startup and resources. `API.Handler() http.Handler` assembles routing and middleware. The inline health handler takes writer/request and writes its result using JSON. Signal.NotifyContext supplies cancellation for shutdown coordination. main defers the signal stop function; pool.Close is explicit after serve has joined handler cleanup. serve(ctx,srv,listener,drain) returns joined serving/shutdown errors, or errHandlersStuck. Its dedicated work context is independent of the signal context.
 
 ## Business rules and validation
 
@@ -36,7 +38,7 @@ None. Pool construction during startup is lazy and is not a Ping. The server nev
 
 ## Error handling and edge cases
 
-Invalid pool configuration or pool setup errors cause main to log a generic message and exit. Unexpected listener failure also exits. Shutdown errors are ignored. The shutdown goroutine requests a graceful drain, but main does not explicitly wait for that goroutine after ListenAndServe returns; the ten-second budget should not be interpreted as a guarantee that every in-flight request completes.
+Invalid pool configuration or pool setup errors cause main to log a generic message and exit. Unexpected listener failure also exits. Shutdown errors are returned and logged. Graceful drain is ten seconds; forced cancellation then allows one second for handlers. A permanently stuck handler takes an explicit process-exit path rather than an unbounded pool close. Health is still liveness only.
 
 ## Concurrency and consistency
 
@@ -44,11 +46,11 @@ The handler uses no mutable health state and does not contend for database conne
 
 ## Source-file references
 
-`backend/cmd/server/main.go`, `backend/internal/api/api.go`, `backend/internal/api/api_test.go`, `render.yaml`, `scripts/container-smoke-local.sh`.
+`backend/cmd/server/main.go`, `lifecycle.go`, `lifecycle_test.go`, `backend/internal/api/diagnostics.go`, `backend/internal/api/api.go`, `backend/internal/api/api_test.go`, `render.yaml`, `scripts/container-smoke-local.sh`.
 
 ## Specific coverage and limitations
 
-TestIntegration checks 200 and rejects an untrusted Origin. The local container smoke checks the JSON status field against a real listener. Shutdown draining and database-down health behavior do not have dedicated automated assertions.
+TestIntegration checks 200 and rejects an untrusted Origin. The local container smoke checks the JSON status field against a real listener. TestServeDrain verifies both completed in-flight response and deadline-triggered cancellation using real loopback HTTP; TestServeListenerFailure verifies startup listener failure. A local process probe sent actual SIGTERM while a booking waited on a court lock, released that lock and verified 201, one row and exit zero. Database-down health is not separately asserted.
 
 ## Shared HTTP boundary
 
@@ -78,8 +80,7 @@ and runs `go test -race ./...` in backend. `TestIntegration` in
 `backend/internal/api/api_test.go` creates a unique schema, applies the migration
 twice, invokes handlers through httptest and drops that schema afterward. It uses
 real PostgreSQL but does not open a real HTTP listener. Never supply a production
-connection. Previous local runs passed; this documentation rewrite does not claim
-a fresh test run. Coverage details and gaps specific to this flow follow below.
+connection. Fresh uncached race/integration and lifecycle tests passed for RELIABILITY-010. Coverage details and gaps specific to this flow follow below.
 
 ## Sequence diagram
 
@@ -91,3 +92,32 @@ sequenceDiagram
     A->>A: Origin policy and JSON serialization
     A-->>H: 200 status ok (no database call)
 ```
+
+## Lifecycle sequence
+
+```mermaid
+sequenceDiagram
+    participant O as OS signal
+    participant M as main / serve
+    participant H as HTTP handlers
+    participant P as pgx pool
+    O->>M: SIGTERM
+    M->>M: Shutdown with fresh 10-second deadline
+    alt Graceful completion
+        H-->>M: Handlers finished
+    else Deadline exceeded
+        M->>H: Cancel work and close connections
+        H-->>M: Cleanup (one-second allowance)
+    end
+    M->>P: Close after joined cleanup
+```
+
+A stuck-handler fallback terminates the process instead of the final Close step.
+Health response remains independent of this coordination and has no DB transaction.
+
+## Limitations and follow-up
+
+No readiness endpoint or DB startup ping added. No backup/recovery changes. The
+forced-exit branch bounds handler waiting but cannot guarantee delivery of responses
+or graceful completion of code that ignores cancellation. Request logs contain route
+patterns, IDs and statuses; status is not acknowledgment by the remote caller.

@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"io"
@@ -46,42 +47,90 @@ func (a *API) book(w http.ResponseWriter, r *http.Request) {
 		fail(w, http.StatusBadRequest, "invalid booking request")
 		return
 	}
-	c, err := a.getCourt(r.Context(), input.CourtID)
-	if errors.Is(err, pgx.ErrNoRows) {
-		fail(w, http.StatusNotFound, "court not found")
+	result, status, message := a.reserve(r, input.CourtID, input.Start)
+	if status != http.StatusCreated {
+		fail(w, status, message)
 		return
+	}
+	JSON(w, status, result)
+}
+
+// reserve owns the complete transaction so commit/rollback and pool release happen
+// before book writes any response. Cooperating writers serialize on the court row;
+// PostgreSQL's exclusion constraint still protects against other database writers.
+func (a *API) reserve(r *http.Request, courtID int, start time.Time) (map[string]any, int, string) {
+	started := time.Now()
+	tx, err := a.DB.BeginTx(r.Context(), pgx.TxOptions{IsoLevel: pgx.ReadCommitted})
+	if err != nil {
+		a.databaseError(r, "begin", started, err)
+		return nil, http.StatusServiceUnavailable, "booking unavailable"
+	}
+	// Request cancellation must not prevent rollback from releasing the court lock.
+	defer func() {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		defer cancel()
+		if err := tx.Rollback(ctx); err != nil && !errors.Is(err, pgx.ErrTxClosed) {
+			a.databaseError(r, "rollback", started, err)
+		}
+	}()
+	// Lock only the court, not the joined facility. Different courts stay independent.
+	var c court
+	err = tx.QueryRow(r.Context(), `
+		SELECT c.price_sen,f.opens,f.closes,f.timezone
+		FROM courts c JOIN facilities f ON f.id=c.facility_id
+		WHERE c.id=$1
+		FOR UPDATE OF c
+	`, courtID).Scan(&c.Price, &c.Open, &c.Close, &c.Zone)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, http.StatusNotFound, "court not found"
 	}
 	if err != nil {
-		fail(w, http.StatusServiceUnavailable, "database unavailable")
-		return
+		a.databaseError(r, "court_lock", started, err)
+		return nil, http.StatusServiceUnavailable, "booking unavailable"
 	}
-	if !validSlot(input.Start, time.Now(), c) {
-		fail(w, http.StatusBadRequest, "choose an hourly slot within opening hours and the next 30 days")
-		return
+	if !validSlot(start, time.Now(), c) {
+		return nil, http.StatusBadRequest, "choose an hourly slot within opening hours and the next 30 days"
+	}
+	// A separate READ COMMITTED statement sees commits made while the lock waited.
+	// Combining this read with lock acquisition could use the earlier snapshot.
+	var occupied bool
+	err = tx.QueryRow(r.Context(), `
+		SELECT EXISTS(
+			SELECT 1 FROM bookings
+			WHERE court_id=$1 AND status='confirmed' AND start_at < $3 AND end_at > $2
+		)
+	`, courtID, start, start.Add(time.Hour)).Scan(&occupied)
+	if err != nil {
+		a.databaseError(r, "overlap", started, err)
+		return nil, http.StatusServiceUnavailable, "booking unavailable"
+	}
+	if occupied {
+		return nil, http.StatusConflict, "slot already booked"
 	}
 	var id string
 	var amount int
-	// This single statement reads the current price and inserts the reservation
-	// atomically. The exclusion constraint arbitrates concurrent overlapping
-	// requests; checking availability before inserting would leave a race.
-	err = a.DB.QueryRow(r.Context(), `
+	err = tx.QueryRow(r.Context(), `
 		INSERT INTO bookings(court_id,start_at,end_at,amount_sen) SELECT id,$2,$3,price_sen
 		FROM courts
 		WHERE id=$1
 		RETURNING id,amount_sen
-	`, input.CourtID, input.Start, input.Start.Add(time.Hour)).Scan(&id, &amount)
+	`, courtID, start, start.Add(time.Hour)).Scan(&id, &amount)
 	// SQLSTATE 23P01 is the exclusion-constraint violation for an occupied interval.
 	// Translate this expected contention into a conflict, not a database outage.
 	var pe *pgconn.PgError
 	if errors.As(err, &pe) && pe.Code == "23P01" {
-		fail(w, 409, "slot already booked")
-		return
+		return nil, http.StatusConflict, "slot already booked"
 	}
 	if err != nil {
-		fail(w, http.StatusServiceUnavailable, "booking unavailable")
-		return
+		a.databaseError(r, "insert_scan", started, err)
+		return nil, http.StatusServiceUnavailable, "booking unavailable"
+	}
+	// A failed commit acknowledgment is not proof that no booking was persisted.
+	if err = tx.Commit(r.Context()); err != nil {
+		a.databaseError(r, "commit", started, err)
+		return nil, http.StatusServiceUnavailable, "booking outcome uncertain; refresh availability"
 	}
 	// The INSERT has committed before this response is written. A lost response
 	// can leave a confirmed booking even if the browser reports a network error.
-	JSON(w, http.StatusCreated, map[string]any{"id": id, "court_id": input.CourtID, "start_at": input.Start.UTC(), "end_at": input.Start.Add(time.Hour).UTC(), "amount_sen": amount, "status": "confirmed", "payment": "simulated"})
+	return map[string]any{"id": id, "court_id": courtID, "start_at": start.UTC(), "end_at": start.Add(time.Hour).UTC(), "amount_sen": amount, "status": "confirmed", "payment": "simulated"}, http.StatusCreated, ""
 }

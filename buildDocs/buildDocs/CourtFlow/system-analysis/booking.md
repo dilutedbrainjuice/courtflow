@@ -1,113 +1,175 @@
 # Confirming a guest demo booking
 
-Verified against repository source at `fecc983`; this is a description of the current implementation.
+Verified against the RELIABILITY-010 working tree on 2026-11-01 MYT. This supersedes
+the earlier implicit-transaction implementation. See RELIABILITY_RESULTS.md for receipts.
 
 ## Business purpose
 
-A guest confirms one court for one hour without entering personal details or making a payment. A successful request creates a durable confirmed database row immediately. There is no intermediate payment hold or expiry worker.
+A guest reserves one court for one hour, with immediate simulated confirmation and
+no personal data/payment provider. The change makes cooperating writers wait before
+inserting, avoiding the deadlocks observed under same-slot contention while retaining
+the database exclusion constraint for every writer.
 
 ## API endpoint or triggering event
 
-`POST /api/v1/bookings` is called by Home.book after a guest selects a session. It is public and accepts only the court identifier and start instant.
+Public POST /api/v1/bookings, called by Home.book in frontend/app/page.tsx.
+No identity, ownership, cancellation or idempotency endpoint is introduced.
 
 ## Request and response
 
-Content-Type must equal `application/json` exactly. Example body: `{"court_id":1,"start_at":"2026-11-02T02:00:00Z"}`; choose a future whole-hour instant within the horizon for an actual local call. start_at is decoded by Go time.Time from an RFC3339 timestamp. Success is 201 with id (UUID string), court_id (integer), start_at/end_at (UTC strings), amount_sen (integer), status="confirmed" and payment="simulated". A representative error is HTTP 409 with `{"error":"slot already booked"}`. The response payment field is a label, not a recorded payment transaction.
+Exact Content-Type application/json; one object at most 1024 bytes, for example
+`{"court_id":1,"start_at":"2026-11-03T02:00:00Z"}`. Choose a future eligible time.
+Success remains 201 with UUID id, court_id, UTC start_at/end_at, integer amount_sen,
+status confirmed and payment simulated. Error shape remains `{"error":"message"}`.
+All responses receive a generated X-Request-ID; it is correlation, not an access token.
+A commit error returns 503 with “booking outcome uncertain; refresh availability”.
 
 ## Ordered function call flow
 
-1. The Handler wrapper applies origin policy and the request deadline, then routes to API.book.
-2. book locks the API counter, resets its window after more than a minute, increments attempts and unlocks. Above 120 it returns 429 before body parsing.
-3. It checks exact Content-Type, wraps the body with MaxBytesReader at 1024 bytes and creates a JSON decoder that disallows unknown fields. The first decode must succeed, a second decode must produce io.EOF, and CourtID must be positive.
-4. getCourt(ctx,CourtID) loads current venue/court rules. pgx.ErrNoRows becomes 404.
-5. validSlot(Start,time.Now(),court) verifies time eligibility. Failure becomes 400.
-6. DB.QueryRow executes INSERT SELECT with bound court/start/end values and scans the generated ID and actual amount. There is no preceding occupancy read.
-7. errors.As inspects a PgError: SQLSTATE 23P01 becomes 409. Other database errors become 503. Success calls JSON with the 201 confirmation.
+1. API.Handler installs observe around the origin/header/deadline wrapper and ServeMux.
+   observe generates a request ID, records status and logs completion without raw URLs.
+2. API.book applies the per-process 120/minute attempt cap, exact content type,
+   bounded strict JSON decoding, trailing-data rejection and positive court ID.
+3. book calls reserve(request,courtID,start), which owns transaction lifetime.
+4. reserve begins READ COMMITTED using the request context. It installs a deferred
+   rollback with an independent one-second cleanup context.
+5. A joined court/facility query uses FOR UPDATE OF c. Only the court row is locked.
+   Missing court becomes 404; other errors are classified/logged and become 503.
+6. validSlot(start,time.Now(),court) checks eligibility after acquiring the lock.
+7. A separate SELECT EXISTS checks confirmed overlap using start_at < end and
+   end_at > start. At READ COMMITTED it sees a fresh snapshot after the lock wait.
+   Occupancy becomes 409 without issuing another conflicting INSERT.
+8. INSERT SELECT obtains server price and UUID inside the transaction. The exclusion
+   constraint still rejects conflicting writers that did not take the court lock;
+   SQLSTATE 23P01 maps to 409. Other failures become 503.
+9. reserve commits explicitly. Only acknowledged commit returns a success result.
+   Deferred rollback handles every early return; ErrTxClosed after commit is normal.
+10. After reserve has finished cleanup, book writes fail/JSON. Slow response writes
+    therefore do not hold a court lock or transaction connection.
 
 ## Functions and responsibilities
 
-`book(writer,request)` owns HTTP orchestration and error mapping. `getCourt(ctx,id)` returns price/opening schedule/timezone or an error; `validSlot(start,now,court)` returns a boolean and does not reserve a session. pgx QueryRow/Scan executes the database operation and obtains its result. The shared fail/JSON helpers serialize public messages. The mutex is held only while updating the attempt counter, never during SQL.
+book owns HTTP parsing and response output. reserve returns a result map, HTTP status
+and safe error message; it owns begin, lock, eligibility, overlap, insert, commit and
+rollback. Its start parameter is an instant, courtID an integer; prices are sen.
+validSlot in slots.go returns eligibility only. getCourt remains used by availability;
+booking loads configuration within its transaction instead. databaseError records
+request ID, failed phase, elapsed time since reserve began, safe SQLSTATE/error class
+and cumulative pool statistics. It does not log raw driver messages or body values.
+observe/responseStatus capture ordinary response status and duration; Unwrap supports
+http.ResponseController. JSON/fail retain the existing public encoding contract.
 
 ## Business rules and validation
 
-Each confirmed reservation lasts one hour. The server accepts a strictly future, whole-hour start inside venue opening hours and no later than now.AddDate(0,0,30). The seeded venue uses Kuala Lumpur time and RM25/hour. Client prices, status and duration are not accepted fields. Unknown/trailing JSON, invalid timestamps and nonpositive IDs return 400. An empty/omitted timestamp decodes to a zero time and subsequently fails eligibility. Invalid stored timezone also makes validSlot false and yields 400 in this handler, unlike availability’s explicit 500 path.
+Strictly future whole-hour start, no later than now.AddDate(0,0,30), venue opening
+hours and timezone; exactly one hour, server-owned price/status/duration. Unknown
+fields, malformed/trailing input and nonpositive ID return 400. Invalid stored zone
+fails eligibility. The mutex protects only attempt counting, never reservations.
+The limiter remains shared by all visitors to one process and resets on restart.
 
 ## Database queries and transactions
 
 ```sql
+BEGIN ISOLATION LEVEL READ COMMITTED;
+SELECT c.price_sen,f.opens,f.closes,f.timezone
+FROM courts c JOIN facilities f ON f.id=c.facility_id
+WHERE c.id=$1 FOR UPDATE OF c;
+-- Separate statement: fresh snapshot after the lock wait.
+SELECT EXISTS(SELECT 1 FROM bookings
+ WHERE court_id=$1 AND status='confirmed' AND start_at < $3 AND end_at > $2);
+-- Only if unoccupied:
 INSERT INTO bookings(court_id,start_at,end_at,amount_sen)
-SELECT id,$2,$3,price_sen FROM courts WHERE id=$1
-RETURNING id,amount_sen;
+SELECT id,$2,$3,price_sen FROM courts WHERE id=$1 RETURNING id,amount_sen;
+COMMIT;
 ```
 
-$1 is CourtID, $2 Start and $3 Start.Add(time.Hour). Price is read by the INSERT itself, not trusted from the browser or copied from the earlier configuration read. The statement is an implicit atomic transaction. Schema defaults generate the UUID, confirmed status and created_at timestamp. A CHECK enforces exactly one hour; positive amount and foreign-key checks protect row integrity. The earlier court lookup is a separate statement. There is no application transaction spanning configuration lookup and insertion.
+$1 court ID, $2 start, $3 start plus one hour. Price is read in INSERT SELECT.
+Early outcomes rollback before HTTP response. No migration changed. The GiST
+exclusion over court_id and `[start,end)` remains the final overlap invariant,
+with existing FK, duration, status and positive-price/amount checks.
 
 ## Error handling and edge cases
 
-429 includes Retry-After: 60; this is a conservative retry hint rather than an exact remaining-window calculation. 415 means Content-Type differs from application/json, including an added charset parameter. 400 covers invalid input or slot; 404 a missing court; 409 an occupied interval; 503 lookup/insert failure. A court removed between lookup and INSERT produces no returned row and takes the generic 503 path. Public errors hide driver details. The insert may commit before the browser receives its response: a network error does not imply rollback, and retry can return conflict. There is no idempotency key or authenticated booking lookup.
+403 origin, 415 content type, 400 validation, 404 court, 409 occupancy/23P01,
+429 attempt cap with Retry-After:60, 503 database/cancellation/uncertain commit.
+No automatic retry is introduced. A failed commit acknowledgment or lost HTTP
+response can still conceal a committed booking; this is not exactly-once delivery.
+Rollback uses a fresh bounded context even if the request has expired. Failed
+rollback is logged. Existing pgx cleanup discards unusable connections as needed.
+
+Structured failure fields include phase, class, SQLSTATE, pool total/acquired/idle,
+acquire count/time, empty acquisition and canceled acquisition counts. Counters are
+cumulative per process, not per-request wait percentiles; elapsed_ms is cumulative
+within reserve, not a separate duration for each phase. Expected conflicts do not
+produce database error logs. Request completion logs include generated ID, method,
+matched route, status and elapsed milliseconds; no query strings or client IDs.
 
 ## Concurrency and consistency
 
-The migration defines a GiST exclusion constraint combining court_id equality with overlap of tstzrange(start_at,end_at,'[)'), restricted to confirmed rows. btree_gist supplies equality support for the court ID. PostgreSQL prevents two overlapping confirmed reservations on the same court even across API processes. Identical eligible requests racing together can yield one commit and conflict responses for others; infrastructure failures can still produce other outcomes. Adjacent intervals and different courts are allowed. The application mutex only limits attempts within one API instance and resets on restart; it is not the reservation lock. Opening rules are checked before the INSERT and are not protected against hypothetical concurrent configuration edits.
+Court-row locks coordinate independent API processes. Same-court requests for
+unrelated hours serialize briefly; separate courts remain independent. Facility
+schedule rows are not locked, so future schedule-write APIs need their own policy.
+The separate overlap query matters: a combined lock/check statement can retain a
+snapshot from before a competing commit. Noncooperating SQL writers are protected
+by the exclusion constraint, not by the application protocol.
 
-## Source-file references
-
-`backend/internal/api/booking.go`, `slots.go`, `api.go`, `api_test.go`, `backend/migrations/001_initial.sql`, and `frontend/app/page.tsx:book`.
-
-## Specific coverage and limitations
-
-TestIntegration launches 24 same-slot requests, asserts one 201 and 23 conflicts, then asserts one stored court-1 row. It checks adjacent/different-court success, malformed time, unknown price field, fractional hour, beyond-horizon, closed-hour and empty-body requests. It directly sets the limiter at its cap and checks 429. It does not simulate a lost response, process-to-process contention or all database failures. Exactly-once delivery is not claimed.
-
-## Shared HTTP boundary
-
-`backend/cmd/server/main.go:main` creates the pgx pool and passes it to an `api.API`.
-The pool allows at most eight connections per process. Its owner is main, which
-closes it on exit. Creating the pool is not a database readiness check. The HTTP
-server listens on PORT (8080 by default), with header/read/write/idle timeouts of
-5/10/10/60 seconds and an 8192-byte maximum header size.
-
-`backend/internal/api/api.go:Handler` registers the routes in Go's ServeMux. Its
-wrapper sets Cache-Control: no-store and X-Content-Type-Options: nosniff. A supplied
-Origin must exactly match API.Origins or the wrapper returns 403. Requests without
-Origin remain allowed; this is browser-origin filtering, not authentication.
-OPTIONS requests receive 204 with allowed methods and Content-Type in the allowed
-headers. Other requests receive a five-second context deadline that handlers pass
-to pgx. This cancels database work; it is separate from transport timeouts.
-
-`JSON(writer,status,value)` sets application/json, writes the status, and encodes
-value. `fail(writer,status,message)` uses it to return `{"error":"message"}`.
-Database internals are not sent to clients. Encoding/write errors are ignored once
-the status is committed. Unknown routes/methods use ServeMux's default responses.
-
-## Tests validating the flow
-
-Run `make test` from the repository root. It supplies the loopback TEST_DATABASE_URL
-and runs `go test -race ./...` in backend. `TestIntegration` in
-`backend/internal/api/api_test.go` creates a unique schema, applies the migration
-twice, invokes handlers through httptest and drops that schema afterward. It uses
-real PostgreSQL but does not open a real HTTP listener. Never supply a production
-connection. Previous local runs passed; this documentation rewrite does not claim
-a fresh test run. Coverage details and gaps specific to this flow follow below.
+Diagnosis reproduced 40P01 deadlocks and transactionid waits in the old insert path,
+with pooled requests timing out. Explicit transactions also keep an INSERT from
+implicitly committing before its Scan succeeds; failures before commit roll back.
+Unknown outcomes at commit or response delivery remain possible. The current local
+100-round gates demonstrate reliable healthy contention, not outage immunity.
 
 ## Sequence diagram
 
 ```mermaid
 sequenceDiagram
-    participant W as Guest browser
-    participant A as book
-    participant S as getCourt / validSlot
+    participant U as Guest
+    participant A as book / reserve
     participant D as PostgreSQL
-    W->>A: POST court_id and start_at
-    A->>A: Attempt cap and bounded JSON validation
-    A->>S: Load rules and validate start
-    S->>D: Court/venue lookup
-    D-->>S: Configuration
-    A->>D: INSERT SELECT server price
-    alt Interval can be confirmed
-        D-->>A: Committed ID and amount
-        A-->>W: 201 confirmed / simulated
-    else Confirmed overlap exists
-        D-->>A: SQLSTATE 23P01
-        A-->>W: 409 slot already booked
+    U->>A: POST court and start
+    A->>A: Attempt cap and JSON validation
+    A->>D: Begin; lock court and load rules
+    A->>A: Validate time
+    A->>D: Separate overlap query
+    alt Occupied
+        A->>D: Rollback and release
+        A-->>U: 409 conflict
+    else Available
+        A->>D: INSERT SELECT price
+        A->>D: Commit
+        D-->>A: Acknowledged
+        A-->>U: 201 confirmation
     end
 ```
+
+## Source-file references
+
+backend/internal/api/{booking,api,diagnostics,slots}.go;
+backend/migrations/001_initial.sql; frontend/app/page.tsx.
+Tests: api_test.go, reliability_test.go, diagnostics_test.go;
+scripts/concurrency-local.py.
+
+## Tests validating the flow
+
+Existing TestIntegration still verifies 24 contenders, one row, adjacency, different
+courts, malformed requests, CORS and rate limiting with real isolated PostgreSQL.
+TestBookingLockCancellationAndIndependentCourt waits for an observed DB lock wait,
+proves a second court succeeds, cancels the first request, checks no write and then
+checks the pool/lock recover. TestDirectOverlapAndRollback verifies partial overlap,
+adjacency and rollback of an earlier insert in an aborted transaction.
+TestRequestDiagnostics checks request correlation, matched route/status and omission
+of untrusted request IDs/query values. Go race tests execute these assertions.
+
+Run `make test` with local PostgreSQL. For process-level stress, build a local binary
+and run `python3 scripts/concurrency-local.py --binary /absolute/path/to/binary
+--instances 2 --output /tmp/two.json` (one shell line). Repeat with --instances 1.
+Defaults are 100 rounds and 100 contenders. Each round checks exact statuses, row
+count, returned UUID and amount against PostgreSQL. Fixtures use unique schemas;
+process restarts keep the real limiter from masking contention. No cloud target.
+
+## Limitations and follow-up
+
+No durable idempotency, fairness improvement, identity or multi-slot transaction.
+No sustained capacity claim; retain original baseline and see RELIABILITY_RESULTS.md.
+Connection budget still eight per process. Response-write errors remain ignored by
+JSON after headers; completion logs record HTTP status, not proof of client delivery.

@@ -30,46 +30,8 @@ func TestSlotValidation(t *testing.T) {
 // TestIntegration exercises the real HTTP handlers and PostgreSQL constraints.
 // It requires a loopback database and keeps application tables in a temporary schema.
 func TestIntegration(t *testing.T) {
-	url := os.Getenv("TEST_DATABASE_URL")
-	if url == "" {
-		t.Skip("TEST_DATABASE_URL absent; integration not run")
-	}
-	cfg, err := pgxpool.ParseConfig(url)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if cfg.ConnConfig.Host != "127.0.0.1" && cfg.ConnConfig.Host != "localhost" {
-		t.Fatal("integration requires loopback database")
-	}
+	pool := testPool(t)
 	ctx := context.Background()
-	admin, err := pgxpool.NewWithConfig(ctx, cfg)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer admin.Close()
-	// A unique search_path isolates tables from developer data. The shared public
-	// schema remains visible so the btree_gist extension can be reused.
-	schema := fmt.Sprintf("test_%d", time.Now().UnixNano())
-	if _, err = admin.Exec(ctx, "CREATE SCHEMA "+schema); err != nil {
-		t.Fatal(err)
-	}
-	defer admin.Exec(ctx, "DROP SCHEMA "+schema+" CASCADE")
-	cfg.ConnConfig.RuntimeParams["search_path"] = schema + ",public"
-	pool, err := pgxpool.NewWithConfig(ctx, cfg)
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer pool.Close()
-	sql, err := os.ReadFile("../../migrations/001_initial.sql")
-	if err != nil {
-		t.Fatal(err)
-	}
-	// The initial migration must tolerate a repeat without duplicating seed rows.
-	for range 2 {
-		if _, err = pool.Exec(ctx, string(sql)); err != nil {
-			t.Fatal(err)
-		}
-	}
 	a := &API{DB: pool, Origins: map[string]bool{"http://localhost:3000": true}}
 	h := a.Handler()
 	loc, _ := time.LoadLocation("Asia/Kuala_Lumpur")
@@ -110,7 +72,7 @@ func TestIntegration(t *testing.T) {
 		t.Fatalf("success=%d conflict=%d", success, conflict)
 	}
 	var count int
-	if err = pool.QueryRow(ctx, "SELECT count(*) FROM bookings WHERE court_id=1").Scan(&count); err != nil || count != 1 {
+	if err := pool.QueryRow(ctx, "SELECT count(*) FROM bookings WHERE court_id=1").Scan(&count); err != nil || count != 1 {
 		t.Fatalf("count=%d err=%v", count, err)
 	}
 	// Adjacent sessions and simultaneous sessions on other courts must still work.
@@ -147,4 +109,50 @@ func TestIntegration(t *testing.T) {
 	if code := post(body(3, start)); code != 429 {
 		t.Errorf("rate limit %d", code)
 	}
+}
+
+func testPool(t *testing.T) *pgxpool.Pool {
+	t.Helper()
+	url := os.Getenv("TEST_DATABASE_URL")
+	if url == "" {
+		t.Skip("TEST_DATABASE_URL absent; integration not run")
+	}
+	cfg, err := pgxpool.ParseConfig(url)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if cfg.ConnConfig.Host != "127.0.0.1" && cfg.ConnConfig.Host != "localhost" {
+		t.Fatal("integration requires loopback database")
+	}
+	ctx := context.Background()
+	admin, err := pgxpool.NewWithConfig(ctx, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(admin.Close)
+	// A unique search_path isolates tables from developer data. The shared public
+	// schema remains visible so the btree_gist extension can be reused.
+	schema := fmt.Sprintf("test_%d", time.Now().UnixNano())
+	if _, err = admin.Exec(ctx, "CREATE SCHEMA "+schema); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _, _ = admin.Exec(ctx, "DROP SCHEMA "+schema+" CASCADE") })
+	cfg.ConnConfig.RuntimeParams["search_path"] = schema + ",public"
+	cfg.ConnConfig.RuntimeParams["application_name"] = schema
+	pool, err := pgxpool.NewWithConfig(ctx, cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(pool.Close)
+	sql, err := os.ReadFile("../../migrations/001_initial.sql")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The initial migration must tolerate a repeat without duplicating seed rows.
+	for range 2 {
+		if _, err = pool.Exec(ctx, string(sql)); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return pool
 }

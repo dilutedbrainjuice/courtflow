@@ -185,3 +185,67 @@ Use docs/PORTABLE_DEVELOPMENT_WORKFLOW.md to establish this process on another
 machine/model. It contains its own setup prompt and does not require original
 chat context, provider credentials or plugins. Destination paths and approvals
 must be established independently.
+
+## AUDIT-008 — 2026-10-31 MYT: backend interview readiness
+
+Audit only at source HEAD 77fa3a9; no application changes, Chisle, cloud access,
+deployment, push or commit. Current assessment: 64/100, CONDITIONAL GO for junior
+interviews; read PORTFOLIO_READINESS_AUDIT.md and PERFORMANCE_BASELINE.md before
+making portfolio claims. This audit supersedes earlier “no known failing checks”
+statements for stronger contention behavior, not historical release receipts.
+
+Fresh checks: Go unit/real-Postgres integration/race/vet/build, frontend lint,
+typecheck and host-access production build passed. Five mocked browser tests passed
+with WATCHPACK_POLLING=true (default watcher hit EMFILE). Initial sandbox Next build
+failed TypeScript config parsing; host retry passed. No dependency installation.
+
+Two independent local API processes, 100 simultaneous reservations × 100 rounds:
+73 rounds exactly 1 created/99 conflicts/1 stored row. Total 75 created, 7,228
+expected conflicts, 2,697 unexpected 503s. At most one persisted row in every
+round; 14 all-503 rounds nevertheless committed a booking, 11 stored none.
+PostgreSQL logs show cancellation during exclusion checks. Root cause unresolved.
+Direct SQL partial-overlap rejection, adjacency and transaction rollback passed.
+Read endpoint benchmarks and raw measurements are preserved in audit-evidence/.
+
+Other findings: main does not join HTTP Shutdown before pool close/exit; shared
+anonymous limiter permits starvation (120 invalid → next legitimate 429). No
+critical unauthorized/private-data path demonstrated in current public demo.
+Smallest next work: diagnose contention/ambiguous responses, fix shutdown lifecycle,
+add error/pool diagnostics, rerun deterministic persisted-state multi-process gate.
+Idempotency is the next valuable feature, not implemented by this audit.
+
+Local audit schemas removed and API processes stopped; public bookings remained 0.
+No fresh restart-durability/image/provider/security-scanner checks. Application
+source retained unchanged, including restoration of generated next-env.d.ts.
+
+## DESIGN-009 — reliability remediation proposal (2026-10-31 MYT)
+
+User requested brainstorming, SA first, then review; no implementation. Added
+system-analysis/reliability-remediation-proposal.md and RELIABILITY_REMEDIATION_PLAN.md.
+Author review complete. Preferred conditional candidate: database court-row lock,
+separate READ COMMITTED occupancy query, insert/commit with exclusion retained.
+Diagnostic reproduction is mandatory before selecting that fix; root cause unresolved.
+Shutdown requires joined drain, bounded cancellation and ordered pool cleanup.
+No code changes or fix tests. Wait for a subsequent implementation request; use the
+proposal's acceptance gates and preserve original audit measurements.
+
+## RELIABILITY-010 — 2026-11-01 MYT: local remediation complete
+
+Implemented DESIGN-009 after diagnostic reproduction showed 40P01 insert deadlocks,
+transactionid waits and exhausted request budgets. Booking now owns a READ COMMITTED
+court-row transaction with separate overlap snapshot and explicit commit. Constraint
+unchanged. Cleanup completes before response writes. Added request IDs, sanitized
+error phase/SQLSTATE/pool counters and joined drain/cancellation before pool closure.
+No idempotency/fairness/authentication expansion or migration.
+
+Final PASS: uncached Go race/unit/integration, vet/build; frontend lint/typecheck/build
+and all five mocked browser tests. Both 100-round × 100-contender process gates passed:
+20,000 total attempts, 200 created, 19,800 conflicts, zero unexpected outcomes, every
+round persisted exactly one matching UUID/2500-sen row. Real SIGTERM during blocked
+booking drained to 201/one row/exit 0. Local read baseline rerun and evidence preserved.
+See RELIABILITY_RESULTS.md and current booking/health SA. Old audit score is historical;
+no new score assigned. Unknown commit/response outcomes and shared limiter remain.
+
+Chisle stopped; explanatory comments and code review completed before final checks.
+No cloud, push or deployment. Local processes/schemas cleaned up. Next action: owner
+can review local changes; production release requires its own explicit authorization.

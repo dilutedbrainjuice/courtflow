@@ -197,3 +197,83 @@ Final browser regression: all five Playwright tests passed; git diff --check pas
   transfer option and a clearly labeled no-plugin implementation-mode fallback.
 - Validation: reviewed against current workflow, Markdown fences and whitespace.
   Documentation only; application tests not rerun. No deployment or remote push.
+
+## 2026-10-31 — AUDIT-008: backend interview readiness and local baseline
+
+- Objective: critical evidence-based Go portfolio audit only, source HEAD 77fa3a9.
+- Added PORTFOLIO_READINESS_AUDIT.md, PERFORMANCE_BASELINE.md and audit-evidence/
+  local-audit.py/local-audit-results.json; appended current findings to HANDOFF.md.
+  No application source edits, feature changes, Chisle, production access or commit.
+- Reviewed Go/React/SQL/tests/scripts, Git history, architecture and release config.
+  Scored 64/100, CONDITIONAL GO for junior interviews. Kept historical production
+  receipts separate from current audit verification; no provider access.
+- Fresh PASS: Go TestSlotValidation/TestIntegration with loopback PostgreSQL and
+  unique test schema, uncached race, vet, compilation; frontend lint/typecheck and
+  host-access production build; five mocked Playwright tests (polling, 10.3s).
+  Initial sandbox Next build failed parsing TS config; host retry passed. Default
+  browser watcher hit EMFILE; stopped audit processes and polling retry passed.
+- FAIL: strict 100-attempt contention contract over 100 two-process rounds. 73
+  rounds met 1 created/99 conflicts/1 row; 75 total created, 7,228 expected 409s,
+  2,697 unexpected 503s. Never >1 stored row. 14 all-503 rounds committed one row,
+  11 committed none. Database logs show canceled exclusion-constraint checks;
+  root cause not claimed. DB integrity and API reliability distinguished.
+- PASS: direct SQL partial overlap rejection, adjacent insert and explicit rollback
+  with persisted count; limiter starvation probe 120 invalid then legitimate 429.
+  Measured GET facilities/availability at concurrency 1/10/50/100 for ~3 seconds,
+  RPS/mean/p50/p95/p99, API CPU/RSS and sampled DB sessions. Raw evidence and exact
+  reproduction commands retained; no production extrapolation or invented metrics.
+- Review findings: shutdown not joined, shared anonymous cap, no idempotency or
+  identity/ownership surface, weak runtime error/pool visibility. No demonstrated
+  double-booking/private-data authorization defect; bounded scope clearly stated.
+- NOT VERIFIED fresh: restart durability, image build/smoke, provider settings,
+  real-backend browser journey, backup restore, vulnerability scans, pool wait stats,
+  contention CPU/RSS, sustained successful-write throughput and in-flight shutdown.
+- Cleanup: removed audit schemas/stopped API processes; existing local Postgres
+  remains running; public bookings count stayed 0. Generated next-env restored.
+- Validation: reviewed report against raw results and source; git diff --check.
+- Commit hash: none (audit documentation left for owner review).
+- Next action: separately implement/verify contention reliability and joined
+  shutdown with diagnostic telemetry; then repeat the isolated multi-process gate.
+
+## 2026-10-31 — DESIGN-009: reliability brainstorm, proposed SA and review
+
+- Objective: plan remediation after AUDIT-008 without implementing first.
+- Added system-analysis/reliability-remediation-proposal.md and
+  RELIABILITY_REMEDIATION_PLAN.md; updated HANDOFF with design-only continuation.
+- Compared timeout/pool tuning, local mutex, selective retries, advisory locks,
+  court-row transactions and idempotency. Chose diagnosis first and conditional
+  court-row serialization; retained exclusion constraint and unknown-commit caveat.
+- Reviewed source contracts, transaction snapshot boundaries, cross-process locking,
+  limiter effects and shutdown ownership. Author review; no independent review claimed.
+- Validation: documentation/source review and git diff --check only. No application
+  changes, new tests executed, Chisle, production access, commit or deployment.
+- Open issue: exact contention/commit-acknowledgment failure cause is unproven.
+- Next action: user reviews plan; implement only on a subsequent request.
+
+## 2026-11-01 — RELIABILITY-010: booking and shutdown reliability
+
+Implemented DESIGN-009 after diagnostic reproduction showed 40P01 insert deadlocks,
+transactionid waits and exhausted request budgets. Booking now owns a READ COMMITTED
+court-row transaction with separate overlap snapshot and explicit commit. Constraint
+unchanged. Cleanup completes before response writes. Added request IDs, sanitized
+error phase/SQLSTATE/pool counters and joined drain/cancellation before pool closure.
+No idempotency/fairness/authentication expansion or migration.
+
+Final PASS: uncached Go race/unit/integration, vet/build; frontend lint/typecheck/build
+and all five mocked browser tests. Both 100-round × 100-contender process gates passed:
+20,000 total attempts, 200 created, 19,800 conflicts, zero unexpected outcomes, every
+round persisted exactly one matching UUID/2500-sen row. Real SIGTERM during blocked
+booking drained to 201/one row/exit 0. Local read baseline rerun and evidence preserved.
+See RELIABILITY_RESULTS.md and current booking/health SA. Old audit score is historical;
+no new score assigned. Unknown commit/response outcomes and shared limiter remain.
+
+Chisle stopped; explanatory comments and code review completed before final checks.
+No cloud, push or deployment. Local processes/schemas cleaned up. Next action: owner
+can review local changes; production release requires its own explicit authorization.
+
+Files: backend booking/routing/main/tests; new diagnostics and lifecycle helpers/tests;
+scripts/concurrency-local.py; current booking/health SA, architecture, results/evidence,
+audit/proposal follow-up pointers, README, HANDOFF and this append-only log. Existing
+AUDIT-008/DESIGN-009 artifacts preserved. Initial test-helper extraction had a compile
+error, corrected before final validation; SIGTERM probe filename initially shadowed
+Python signal, renamed and passed. No omitted run is counted as a pass.

@@ -49,7 +49,7 @@ func (a *API) Handler() http.Handler {
 	m.HandleFunc("GET /api/v1/facilities/{id}/courts", a.courts)
 	m.HandleFunc("GET /api/v1/courts/{id}/availability", a.availability)
 	m.HandleFunc("POST /api/v1/bookings", a.book)
-	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	return observe(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "no-store")
 		w.Header().Set("X-Content-Type-Options", "nosniff")
 		if origin := r.Header.Get("Origin"); origin != "" {
@@ -70,6 +70,9 @@ func (a *API) Handler() http.Handler {
 		// read/write timeouts are configured separately on the HTTP server.
 		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 		defer cancel()
-		m.ServeHTTP(w, r.WithContext(ctx))
-	})
+		// Keep this request pointer so the outer observer sees ServeMux
+		// populate its matched route pattern.
+		*r = *r.WithContext(ctx)
+		m.ServeHTTP(w, r)
+	}))
 }

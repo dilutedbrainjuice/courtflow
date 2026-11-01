@@ -2,7 +2,9 @@ package main
 
 import (
 	"context"
+	"errors"
 	"log/slog"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
@@ -37,7 +39,6 @@ func main() {
 		slog.Error("database setup failed")
 		os.Exit(1)
 	}
-	defer pool.Close()
 	// Origins must match browser Origin headers exactly, including scheme and port.
 	origins := map[string]bool{}
 	for _, o := range strings.Split(os.Getenv("ALLOWED_ORIGINS"), ",") {
@@ -59,17 +60,22 @@ func main() {
 		IdleTimeout:       60 * time.Second,
 		MaxHeaderBytes:    8192,
 	}
-	// On termination, stop accepting requests and give active handlers up to ten
-	// seconds to finish. Use a fresh context because the signal context is canceled.
-	go func() {
-		<-ctx.Done()
-		c, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-		_ = srv.Shutdown(c)
-	}()
+	listener, err := net.Listen("tcp", srv.Addr)
+	if err != nil {
+		slog.Error("listen failed")
+		pool.Close()
+		os.Exit(1)
+	}
 	slog.Info("API listening", "port", port)
-	if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-		slog.Error("server failed")
+	// serve returns after handler cleanup, or explicitly reports a stuck handler.
+	err = serve(ctx, srv, listener, 10*time.Second)
+	if errors.Is(err, errHandlersStuck) {
+		slog.Error("forced shutdown: handlers failed to stop")
+		os.Exit(1)
+	}
+	pool.Close()
+	if err != nil {
+		slog.Error("server stopped with error", "error", err)
 		os.Exit(1)
 	}
 }

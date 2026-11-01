@@ -33,3 +33,12 @@ rewrite a migration already applied in production. Health is liveness only.
 The frontend is statically rendered then reads the API in the browser. No proxy,
 SSR data credentials, realtime socket or privileged operations API is present.
 Manual deploy configuration exists, with no cloud resources created.
+
+## RELIABILITY-010 — 2026-11-01 current write/lifecycle behavior
+
+Booking uses a READ COMMITTED transaction locking only the court row, followed by
+a separate overlap read, INSERT SELECT and explicit commit. The exclusion constraint
+remains authoritative across all writers. Request IDs/status logs and sanitized SQL
+failure/pool counters aid diagnosis. main joins bounded HTTP drain/cancellation before
+pool closure; see current booking/health SA and RELIABILITY_RESULTS.md. Earlier planned
+and release-status paragraphs are historical. No production deployment in this change.

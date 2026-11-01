@@ -70,3 +70,23 @@ Health checks report process liveness, not database readiness.
 The public demo is https://courtflow-demo.vercel.app. See `docs/PRODUCTION_RUNBOOK.md`
 for manual releases. Git pushes do not automatically deploy. Local changes require a
 new approved release before they appear in production.
+
+### Reliability regression
+
+The booking path serializes cooperating writers on a PostgreSQL court-row lock,
+checks overlap in a separate transaction snapshot, and retains the GiST exclusion
+constraint. Request IDs and sanitized database failure/pool logs aid diagnosis.
+Shutdown drains handlers before closing the pool. See
+[local remediation results](buildDocs/buildDocs/CourtFlow/RELIABILITY_RESULTS.md).
+
+For the isolated 100-round × 100-contender real-process gate:
+
+```bash
+(cd backend && go build -o /tmp/courtflow-fixed-api ./cmd/server)
+python3 scripts/concurrency-local.py --binary /tmp/courtflow-fixed-api --instances 1 --output /tmp/one.json
+python3 scripts/concurrency-local.py --binary /tmp/courtflow-fixed-api --instances 2 --output /tmp/two.json
+```
+
+Requires the existing local PostgreSQL container and free ports 18091/18092. The
+script resets only its temporary schema, verifies stored UUID/price/count and stops
+its API processes. Process restarts per round keep the actual attempt cap intact.
