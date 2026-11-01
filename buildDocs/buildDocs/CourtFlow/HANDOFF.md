@@ -249,3 +249,28 @@ no new score assigned. Unknown commit/response outcomes and shared limiter remai
 Chisle stopped; explanatory comments and code review completed before final checks.
 No cloud, push or deployment. Local processes/schemas cleaned up. Next action: owner
 can review local changes; production release requires its own explicit authorization.
+
+## RELEASE-011 — 2026-11-01 MYT: reliability release live
+
+Owner explicitly requested push/deploy and confirmed existing Render My Workspace.
+Pushed a08960ae86d979dcdd74c74086c70403f870aac6 to origin/main. Prior local
+race/integration/vet/build/frontend/browser/20,000-attempt receipts apply to that
+unchanged commit. No schema changes or production migration.
+
+Vercel production dpl_14AMKqG6Kf1f2dShxPjNrDMgrqyD READY on a08960a;
+https://courtflow-demo.vercel.app returns HTTP 200. Render manual deployment
+dep-dbjlai2jnfac738bavc0 LIVE on the same full SHA, finished 2026-11-01
+15:06:34 UTC (23:06 MYT). API https://courtflow-api-gqes.onrender.com.
+Render remains Free, autoDeploy no / trigger off, health path /healthz. Source
+frontend/vercel.json continues disabling Git-triggered deployments.
+
+Minimal production API smoke: health 200; exact frontend Origin CORS and generated
+request IDs verified. One POST returned 201 confirmed, Court D, 2026-11-02
+08:00–09:00 MYT, 2500 sen. Booking reference 52e51912-99f9-4ece-9221-fff7863a7f34.
+Subsequent availability read marked that exact interval unavailable. No second
+booking, stress test, DB experiment or production cleanup. This was an HTTP/API
+integration smoke, not an automated browser-to-API journey. Public frontend HTML
+also returned 200. Free-tier cold starts/retention and idempotency limitations remain.
+
+Release receipt is documentation-only and may be committed/pushed separately;
+deployed application SHA stays a08960a. No automatic redeployment required.

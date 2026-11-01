@@ -1,6 +1,6 @@
 # CourtFlow production runbook — MANUAL RELEASE ONLY
 
-**Status: first manual release verified on 2026-10-31 MYT.** Frontend: https://courtflow-demo.vercel.app · API: https://courtflow-api-gqes.onrender.com. Deployed application commit: `60c498a`. See HANDOFF RELEASE-003 for receipts. This is a public **non-commercial portfolio demo** using free plans. Local tests are the source of truth. Owner manually verifies the production build and smoke test.
+**Status: first manual release verified on 2026-10-31 MYT.** Frontend: https://courtflow-demo.vercel.app · API: https://courtflow-api-gqes.onrender.com. Deployed application commit: `a08960a` (reliability release verified 2026-11-01 MYT; see HANDOFF RELEASE-011). See HANDOFF RELEASE-003 for receipts. This is a public **non-commercial portfolio demo** using free plans. Local tests are the source of truth. Owner manually verifies the production build and smoke test.
 
 ## Stack
 - GitHub: public monorepo (`/home/terasit/VSProjects/court`)
